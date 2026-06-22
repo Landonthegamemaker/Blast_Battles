@@ -322,12 +322,12 @@
       const swiftSteps = isSwift ? (PHASES[G.phase] === 'fast' ? 2 : 1) : 1;
       const reachable = G.awaitingMove ? getReachableForChar(G.playerChar, G.playerPos, swiftSteps) : [];
 
-      // 5x5 grid: 5 rows × 5 cols = 25 tiles
-      for (let r = 0; r < 5; r++) {
+      // 7x7 grid: 7 rows × 7 cols = 49 tiles
+      for (let r = 0; r < 7; r++) {
         const rowDiv = document.createElement('div');
         rowDiv.className = 'arena-row';
-        for (let c = 0; c < 5; c++) {
-          const idx = r * 5 + c;
+        for (let c = 0; c < 7; c++) {
+          const idx = r * 7 + c;
           const loc = G.locations[idx];
           const tile = document.createElement('div');
           tile.className = 'location-tile';
