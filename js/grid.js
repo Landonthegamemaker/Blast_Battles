@@ -121,12 +121,12 @@ function getReachableForChar(char, pos, steps) {
 // ── Distance ─────────────────────────────────────────────────────────────────
 
 /**
- * Chebyshev distance between two tile indices on the 5×5 grid.
+ * Chebyshev distance between two tile indices on the 7×7 grid.
  * Diagonals count as 1 (king-move distance), matching `getReachable`.
  * Used for range checks (melee = 0, pistol/shotgun = 1, AR = 2, sniper = 3).
  *
- * @param {number} a - Tile index (0–24)
- * @param {number} b - Tile index (0–24)
+ * @param {number} a - Tile index (0–48)
+ * @param {number} b - Tile index (0–48)
  * @returns {number}
  */
 function getDistance(a, b) {

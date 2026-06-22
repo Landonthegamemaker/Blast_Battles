@@ -161,14 +161,14 @@ function initGame() {
   const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
   const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
 
-  // 5×5 grid — center tile always neutral
-  const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 25);
-  locs[12] = deepClone({
+  // 7×7 grid — center tile always neutral
+  const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 49);
+  locs[24] = deepClone({
     id: 'lCenter', name: 'Central Ground', effect: 'neutral',
     effectDesc: 'No special effect', icon: '⬜', css: 'neutral'
   });
 
-  // Reset G — player starts top-left (0), bot starts bottom-right (24)
+  // Reset G — player starts top-left (0), bot starts bottom-right (48)
   G = {
     turn: 1,
     phase: 0,
@@ -180,7 +180,7 @@ function initGame() {
     playerInPlay: [],
     botInPlay: [],
     playerPos: 0,
-    botPos: 24,
+    botPos: 48,
     locations: locs,
     weaponDeck,
     defenseDeck,
