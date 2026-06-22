@@ -29,6 +29,8 @@
 'use strict';
 
 // ── Mutable globals ──────────────────────────────────────────────────────────
+/** G is the live game state object. It gets reset each match; see initGame() for structure*/
+let G = {};
 
 /** Set by char-select.js when the player confirms their character. */
 let _selectedCharId = null;
@@ -36,8 +38,8 @@ let _selectedCharId = null;
 /** Phase timer state */
 const PHASE_DURATIONS = { fast: 15, medium: 15, slow: 15, charged: 15 };
 let _phaseTimerInterval = null;
-let _phaseTimeLeft      = 15;
-let _autoCheckTimeout   = null;
+let _phaseTimeLeft = 15;
+let _autoCheckTimeout = null;
 
 // ── Difficulty entry point ────────────────────────────────────────────────────
 
@@ -68,9 +70,9 @@ function initGame() {
   if (slider) { slider.value = 1; updatePhaseSpeed(1); }
 
   // Fresh shuffled decks
-  const weaponDeck  = shuffle(deepClone(WEAPON_POOL));
+  const weaponDeck = shuffle(deepClone(WEAPON_POOL));
   const defenseDeck = shuffle(deepClone(DEFENSE_POOL));
-  const charPool    = shuffle(deepClone(CHARACTER_POOL));
+  const charPool = shuffle(deepClone(CHARACTER_POOL));
 
   // Use player's selected character; bot gets a random from the opposite faction
   const selectedChar = CHARACTER_POOL.find(c => c.id === _selectedCharId);
@@ -78,38 +80,38 @@ function initGame() {
     console.error('No characters available in pool. Check CHARACTER_POOL is populated.');
     return;
   }
-  const playerChar   = deepClone(selectedChar || charPool[0]);
-  const oppFaction   = playerChar.faction === 'hero' ? 'villain' : 'hero';
+  const playerChar = deepClone(selectedChar || charPool[0]);
+  const oppFaction = playerChar.faction === 'hero' ? 'villain' : 'hero';
   const botCandidates = charPool.filter(c => c.faction === oppFaction && c.id !== playerChar.id);
-  const botChar      = deepClone(botCandidates[0] || charPool.find(c => c.id !== playerChar.id));
+  const botChar = deepClone(botCandidates[0] || charPool.find(c => c.id !== playerChar.id));
 
   // The Shadow: mirrors the opponent's attribute, speed, and HP
   function applyShadowMirror(shadow, mirror) {
     shadow.attribute = mirror.attribute;
-    shadow.speed     = mirror.speed;
-    shadow.hp        = mirror.maxHp;
-    shadow.maxHp     = mirror.maxHp;
-    shadow.name      = `Dark ${mirror.name}`;
-    const parts      = mirror.attrDesc.split(' · ');
-    shadow.attrDesc  = `Same HP & ${parts[0]}` + (parts[1] ? ` · Always acts after bot` : ' · Always acts after bot');
+    shadow.speed = mirror.speed;
+    shadow.hp = mirror.maxHp;
+    shadow.maxHp = mirror.maxHp;
+    shadow.name = `Dark ${mirror.name}`;
+    const parts = mirror.attrDesc.split(' · ');
+    shadow.attrDesc = `Same HP & ${parts[0]}` + (parts[1] ? ` · Always acts after bot` : ' · Always acts after bot');
   }
-  if (botChar.attribute    === 'shadow_clone') applyShadowMirror(botChar,    playerChar);
+  if (botChar.attribute === 'shadow_clone') applyShadowMirror(botChar, playerChar);
   if (playerChar.attribute === 'shadow_clone') applyShadowMirror(playerChar, botChar);
 
   // Starter hand — 1 thematic weapon + 1 defense card (or 2nd weapon for Pete/Tracy)
   function starterDeck(char, wDeck, dDeck) {
     const attr = char.attribute;
     const subtypeMap = {
-      dual_wield:          'pistol',
-      deadeye:             'revolver',
-      pistol_specialist:   'pistol',
+      dual_wield: 'pistol',
+      deadeye: 'revolver',
+      pistol_specialist: 'pistol',
       revolver_specialist: 'revolver',
-      shotgun_specialist:  'shotgun',
-      rifle_specialist:    'assault_rifle',
-      sniper_specialist:   'sniper',
-      melee_specialist:    'melee',
-      swift_melee:         'melee',
-      explosive_specialist:'explosive',
+      shotgun_specialist: 'shotgun',
+      rifle_specialist: 'assault_rifle',
+      sniper_specialist: 'sniper',
+      melee_specialist: 'melee',
+      swift_melee: 'melee',
+      explosive_specialist: 'explosive',
     };
     const preferredSubtype = subtypeMap[attr];
 
@@ -119,9 +121,9 @@ function initGame() {
       if (idx !== -1) weapon = wDeck.splice(idx, 1)[0];
     }
     if (!weapon) {
-      const fallbackSubtype = attr === 'swift_melee'   ? 'melee'
-        : ['swift', 'extra_carry'].includes(attr)       ? 'pistol'
-        : 'assault_rifle';
+      const fallbackSubtype = attr === 'swift_melee' ? 'melee'
+        : ['swift', 'extra_carry'].includes(attr) ? 'pistol'
+          : 'assault_rifle';
       const idx = wDeck.findIndex(c => c.subtype === fallbackSubtype);
       weapon = idx !== -1 ? wDeck.splice(idx, 1)[0] : wDeck.shift();
     }
@@ -130,21 +132,21 @@ function initGame() {
     if (attr === 'extra_carry' || attr === 'dual_wield') {
       if (attr === 'dual_wield') {
         // Pistol Pete: clone his first pistol for the paired slot
-        const clone      = deepClone(weapon);
-        clone.id         = clone.id + '_clone_' + Math.random().toString(36).slice(2, 7);
-        const pairId     = 'dwpair_' + Math.random().toString(36).slice(2, 9);
+        const clone = deepClone(weapon);
+        clone.id = clone.id + '_clone_' + Math.random().toString(36).slice(2, 7);
+        const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
         weapon.dualWieldPairId = pairId;
-        clone.dualWieldPairId  = pairId;
+        clone.dualWieldPairId = pairId;
         defense = clone;
       } else {
         defense = wDeck.length > 0 ? deepClone(wDeck.shift()) : null;
       }
     } else {
       const defSubtypeMap = {
-        healing:      'syringe',
-        heavy_armor:  'plate_armor',
-        sniper_resist:'plate_armor',
-        run_and_gun:  'helmet',
+        healing: 'syringe',
+        heavy_armor: 'plate_armor',
+        sniper_resist: 'plate_armor',
+        run_and_gun: 'helmet',
       };
       const preferredDef = defSubtypeMap[attr];
       if (preferredDef) {
@@ -157,7 +159,7 @@ function initGame() {
   }
 
   const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
-  const botHand    = starterDeck(botChar,    weaponDeck, defenseDeck);
+  const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
 
   // 5×5 grid — center tile always neutral
   const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 25);
@@ -168,39 +170,39 @@ function initGame() {
 
   // Reset G — player starts top-left (0), bot starts bottom-right (24)
   G = {
-    turn:   1,
-    phase:  0,
+    turn: 1,
+    phase: 0,
     difficulty: G.difficulty || 'medium',
-    playerChar:  deepClone(playerChar),
-    botChar:     deepClone(botChar),
+    playerChar: deepClone(playerChar),
+    botChar: deepClone(botChar),
     playerHand,
     botHand,
     playerInPlay: [],
-    botInPlay:    [],
-    playerPos:    0,
-    botPos:       24,
-    locations:    locs,
+    botInPlay: [],
+    playerPos: 0,
+    botPos: 24,
+    locations: locs,
     weaponDeck,
     defenseDeck,
     selectedCard: null,
-    playerActedThisPhase:  false,
-    botActedThisPhase:     false,
-    awaitingMove:          false,
-    awaitingScrapChoice:   false,
-    playerMovedThisPhase:  false,
-    xrayUsedThisPhase:     false,
-    dualWieldFiredIds:     new Set(),
-    playerToxicTurns:      0,
-    botToxicTurns:         0,
-    gameOver:              false,
-    log:                   [],
-    botRevealedCard:       null,
-    playerDmgDealt:        0,
-    botDmgDealt:           0,
-    playerHealTotal:       0,
-    botHealTotal:          0,
-    lastKillingBlow:       null,
-    matchStartTime:        Date.now(),
+    playerActedThisPhase: false,
+    botActedThisPhase: false,
+    awaitingMove: false,
+    awaitingScrapChoice: false,
+    playerMovedThisPhase: false,
+    xrayUsedThisPhase: false,
+    dualWieldFiredIds: new Set(),
+    playerToxicTurns: 0,
+    botToxicTurns: 0,
+    gameOver: false,
+    log: [],
+    botRevealedCard: null,
+    playerDmgDealt: 0,
+    botDmgDealt: 0,
+    playerHealTotal: 0,
+    botHealTotal: 0,
+    lastKillingBlow: null,
+    matchStartTime: Date.now(),
   };
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
@@ -229,35 +231,35 @@ function initGame() {
  */
 function startPhase() {
   G.playerActedThisPhase = false;
-  G.botActedThisPhase    = false;
-  G.selectedCard         = null;
-  G.awaitingMove         = false;
-  G.awaitingScrapChoice  = false;
+  G.botActedThisPhase = false;
+  G.selectedCard = null;
+  G.awaitingMove = false;
+  G.awaitingScrapChoice = false;
   G.playerMovedThisPhase = false;
-  G.xrayUsedThisPhase    = false;
-  G.dualWieldFiredIds    = new Set();
+  G.xrayUsedThisPhase = false;
+  G.dualWieldFiredIds = new Set();
   clearPhaseTimer();
 
   const phase = PHASES[G.phase];
   logMsg('phase', `— ${phase.toUpperCase()} PHASE — (move OR play a card)`);
 
   // Location effects — damage/heal every phase; card draws on medium/charged
-  const isFirstPhase   = G.turn === 1 && G.phase === 0;
+  const isFirstPhase = G.turn === 1 && G.phase === 0;
   const isCardDrawPhase = phase === 'medium' || phase === 'charged';
   if (!isFirstPhase) applyLocationEffects(isCardDrawPhase);
   checkWin();
   if (G.gameOver) return;
 
   // ── Movement gating by character attribute ─────────────────────────────────
-  const isTitanPlayer   = G.playerChar.attribute === 'heavy_armor';        // Charged only
-  const isSamPlayer     = G.playerChar.attribute === 'shotgun_specialist'; // Slow & Charged
-  const isHuntressPlayer= G.playerChar.attribute === 'sniper_specialist';  // Fast & Medium
-  const isTankPlayer    = G.playerChar.attribute === 'explosive_specialist'; // Not Fast
+  const isTitanPlayer = G.playerChar.attribute === 'heavy_armor';        // Charged only
+  const isSamPlayer = G.playerChar.attribute === 'shotgun_specialist'; // Slow & Charged
+  const isHuntressPlayer = G.playerChar.attribute === 'sniper_specialist';  // Fast & Medium
+  const isTankPlayer = G.playerChar.attribute === 'explosive_specialist'; // Not Fast
 
-  const heavyMoveOk   = !isTitanPlayer   || phase === 'charged';
-  const samMoveOk     = !isSamPlayer     || phase === 'slow' || phase === 'charged';
-  const huntressMoveOk= !isHuntressPlayer|| phase === 'fast' || phase === 'medium';
-  const tankMoveOk    = !isTankPlayer    || phase !== 'fast';
+  const heavyMoveOk = !isTitanPlayer || phase === 'charged';
+  const samMoveOk = !isSamPlayer || phase === 'slow' || phase === 'charged';
+  const huntressMoveOk = !isHuntressPlayer || phase === 'fast' || phase === 'medium';
+  const tankMoveOk = !isTankPlayer || phase !== 'fast';
 
   if (!heavyMoveOk) {
     G.awaitingMove = false;
@@ -270,10 +272,10 @@ function startPhase() {
     logMsg('system', `🎯 ${G.playerChar.name} holds position — can only move on Fast & Medium phases.`);
   } else if (!tankMoveOk) {
     // Hank the Tank — fully locked during Fast phase
-    G.awaitingMove          = false;
-    G.playerActedThisPhase  = true;
-    G.botActedThisPhase     = true;
-    G.playerAutoSkippedPhase= true;
+    G.awaitingMove = false;
+    G.playerActedThisPhase = true;
+    G.botActedThisPhase = true;
+    G.playerAutoSkippedPhase = true;
     logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast phase. Holding position...`);
     setTimeout(() => checkPhaseComplete(), 2000);
   } else {
@@ -283,12 +285,12 @@ function startPhase() {
   // ── Speed-based turn order ─────────────────────────────────────────────────
   // The Shadow always follows — never acts before the bot
   const isShadowPlayer = G.playerChar.name.startsWith('Dark ') || G.playerChar.name === 'The Shadow';
-  const effPlayerSpd   = getEffectiveSpeed(G.playerChar, G.playerHand, G.playerInPlay);
-  const effBotSpd      = getEffectiveSpeed(G.botChar,    G.botHand,    G.botInPlay);
-  const playerFirst    = isShadowPlayer ? false
+  const effPlayerSpd = getEffectiveSpeed(G.playerChar, G.playerHand, G.playerInPlay);
+  const effBotSpd = getEffectiveSpeed(G.botChar, G.botHand, G.botInPlay);
+  const playerFirst = isShadowPlayer ? false
     : effPlayerSpd > effBotSpd ? true
-    : effBotSpd   > effPlayerSpd ? false
-    : Math.random() < 0.5;
+      : effBotSpd > effPlayerSpd ? false
+        : Math.random() < 0.5;
 
   if (!playerFirst) {
     setTimeout(() => {
@@ -370,8 +372,8 @@ function checkPhaseComplete() {
 function skipPhase() {
   if (G.gameOver) return;
   G.playerActedThisPhase = true;
-  G.awaitingMove         = false;
-  G.awaitingScrapChoice  = false;
+  G.awaitingMove = false;
+  G.awaitingScrapChoice = false;
   render();
   checkPhaseComplete();
 }
@@ -381,7 +383,7 @@ function skipPhase() {
 /** Stops any running phase timer intervals/timeouts. */
 function clearPhaseTimer() {
   if (_phaseTimerInterval) { clearInterval(_phaseTimerInterval); _phaseTimerInterval = null; }
-  if (_autoCheckTimeout)   { clearTimeout(_autoCheckTimeout);    _autoCheckTimeout   = null; }
+  if (_autoCheckTimeout) { clearTimeout(_autoCheckTimeout); _autoCheckTimeout = null; }
   _phaseTimeLeft = 0;
 }
 
@@ -396,7 +398,7 @@ function getPhaseSpeed() {
  * @param {number} val - Speed multiplier (1–5)
  */
 function updatePhaseSpeed(val) {
-  const label  = document.getElementById('phase-speed-label');
+  const label = document.getElementById('phase-speed-label');
   if (label) label.textContent = `${val}x`;
   const slider = document.getElementById('phase-speed-slider');
   if (slider) {
@@ -426,9 +428,9 @@ function hasAnyPlayableCard() {
  *   • otherwise → log "Time up!", skipPhase
  */
 function startPhaseTimer() {
-  const speed     = getPhaseSpeed();
+  const speed = getPhaseSpeed();
   const totalSecs = Math.ceil(15 / speed);
-  _phaseTimeLeft  = totalSecs;
+  _phaseTimeLeft = totalSecs;
   updateTimerDisplay();
 
   if (_autoCheckTimeout) clearTimeout(_autoCheckTimeout);
@@ -463,10 +465,10 @@ function startPhaseTimer() {
 function updateTimerDisplay() {
   const el = document.getElementById('phase-timer');
   if (!el) return;
-  el.textContent  = `⏱ ${_phaseTimeLeft}s`;
-  el.style.color  = _phaseTimeLeft <= 5  ? 'var(--accent2)'
+  el.textContent = `⏱ ${_phaseTimeLeft}s`;
+  el.style.color = _phaseTimeLeft <= 5 ? 'var(--accent2)'
     : _phaseTimeLeft <= 10 ? 'var(--medium)'
-    : 'var(--muted)';
+      : 'var(--muted)';
 }
 
 // ── Card play (player) ────────────────────────────────────────────────────────
@@ -483,17 +485,17 @@ function updateTimerDisplay() {
 function playerPlayCard(card) {
   const isPairedCard = G.playerChar.attribute === 'dual_wield' && card.dualWieldPairId != null;
   const thisCardFired = isPairedCard && G.dualWieldFiredIds.has(card.id);
-  if (thisCardFired)              { logMsg('system', 'That pistol already fired this phase.'); return; }
+  if (thisCardFired) { logMsg('system', 'That pistol already fired this phase.'); return; }
   if (!isPairedCard && G.playerActedThisPhase) { logMsg('system', 'You already acted this phase.'); return; }
-  if (G.gameOver)                  return;
-  if (G.awaitingScrapChoice)       { logMsg('system', 'You must choose a card to scrap first.'); return; }
+  if (G.gameOver) return;
+  if (G.awaitingScrapChoice) { logMsg('system', 'You must choose a card to scrap first.'); return; }
 
   const phase = PHASES[G.phase];
 
   // ── Weapon ─────────────────────────────────────────────────────────────────
   if (card.type === 'weapon') {
     const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
-    let allowedPhase  = card.speed;
+    let allowedPhase = card.speed;
     if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
       const idx = PHASE_ORDER.indexOf(card.speed);
       if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
@@ -502,13 +504,13 @@ function playerPlayCard(card) {
       logMsg('system', `${card.name} is a ${card.speed} weapon — can only play in the ${card.speed} phase (or ${allowedPhase} with Deadeye).`); return;
     }
     // Subtype restrictions
-    if (G.playerChar.attribute === 'dual_wield'         && card.subtype !== 'pistol' && card.subtype !== 'revolver')     { logMsg('system', `${G.playerChar.name} can only fire pistols or revolvers — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'deadeye'            && card.subtype !== 'revolver' && card.subtype !== 'pistol')     { logMsg('system', `${G.playerChar.name} uses revolvers & pistols only — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'pistol_specialist'  && card.subtype !== 'pistol')                                    { logMsg('system', `${G.playerChar.name} can only fire pistols — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'revolver_specialist'&& card.subtype !== 'revolver')                                  { logMsg('system', `${G.playerChar.name} can only fire revolvers — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'swift_melee'        && card.subtype !== 'melee')                                     { logMsg('system', `${G.playerChar.name} can only use melee weapons — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'rifle_specialist'   && card.subtype !== 'assault_rifle' && card.subtype !== 'sniper'){ logMsg('system', `${G.playerChar.name} uses rifles only — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'run_and_gun'        && !G.playerMovedThisPhase)                                      { logMsg('system', `${G.playerChar.name} must move before attacking — Run AND Gun!`); return; }
+    if (G.playerChar.attribute === 'dual_wield' && card.subtype !== 'pistol' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire pistols or revolvers — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'deadeye' && card.subtype !== 'revolver' && card.subtype !== 'pistol') { logMsg('system', `${G.playerChar.name} uses revolvers & pistols only — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'pistol_specialist' && card.subtype !== 'pistol') { logMsg('system', `${G.playerChar.name} can only fire pistols — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'revolver_specialist' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire revolvers — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'swift_melee' && card.subtype !== 'melee') { logMsg('system', `${G.playerChar.name} can only use melee weapons — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'rifle_specialist' && card.subtype !== 'assault_rifle' && card.subtype !== 'sniper') { logMsg('system', `${G.playerChar.name} uses rifles only — ${card.name} is locked.`); return; }
+    if (G.playerChar.attribute === 'run_and_gun' && !G.playerMovedThisPhase) { logMsg('system', `${G.playerChar.name} must move before attacking — Run AND Gun!`); return; }
 
     const dist = getDistance(G.playerPos, G.botPos);
     if (card.subtype === 'melee' && dist !== 0) { logMsg('system', `${card.name} is melee — move adjacent (range 0) to use it.`); return; }
@@ -516,7 +518,7 @@ function playerPlayCard(card) {
 
     // Move weapon from hand to inPlay if needed
     if (G.playerHand.find(c => c.id === card.id)) {
-      G.playerHand   = G.playerHand.filter(c => c.id !== card.id);
+      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
       G.playerInPlay.push(card);
     }
 
@@ -532,8 +534,8 @@ function playerPlayCard(card) {
     if (aceCanDodge && Math.random() < 0.50) {
       logMsg('bot', `♠️ Agent Ace dodges ${card.name}!`);
     } else {
-      G.botChar.hp       = Math.max(0, G.botChar.hp - result.finalDmg);
-      G.playerDmgDealt  += result.finalDmg;
+      G.botChar.hp = Math.max(0, G.botChar.hp - result.finalDmg);
+      G.playerDmgDealt += result.finalDmg;
       const rangePct = card.subtype === 'melee'
         ? '(melee)'
         : `(${dist}/${card.range} rng — ${Math.round(dist / card.range * 100)}% dmg)`;
@@ -549,7 +551,7 @@ function playerPlayCard(card) {
     // Dual Wield: track first shot; return early if partner card still unfired
     if (isPairedCard) {
       G.dualWieldFiredIds.add(card.id);
-      const allPaired    = [...G.playerHand, ...G.playerInPlay]
+      const allPaired = [...G.playerHand, ...G.playerInPlay]
         .filter(c => c.dualWieldPairId === card.dualWieldPairId && c.id !== card.id);
       const partnerUnfired = allPaired.some(c => !G.dualWieldFiredIds.has(c.id));
       if (partnerUnfired) {
@@ -562,15 +564,15 @@ function playerPlayCard(card) {
     }
 
     G.playerActedThisPhase = true;
-    G.selectedCard         = null;
+    G.selectedCard = null;
     checkWin();
     if (!G.gameOver) checkPhaseComplete();
     render();
 
-  // ── Defense / Heal ──────────────────────────────────────────────────────────
+    // ── Defense / Heal ──────────────────────────────────────────────────────────
   } else if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') { logMsg('system', `Tracy Guns carries only weapons — defense cards are locked.`); return; }
-    if (G.playerChar.attribute === 'dual_wield')  { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
+    if (G.playerChar.attribute === 'dual_wield') { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
 
     if (card.healAmount > 0) {
       // Healing item
@@ -586,20 +588,20 @@ function playerPlayCard(card) {
       const boostedNote = G.playerChar.attribute === 'healing'
         ? ` (healing boost: ${healAmt} vs base ${card.healAmount})` : '';
       logMsg('heal', `You use ${card.name} → +${healAmt} HP${boostedNote}.`);
-      G.playerHand   = G.playerHand.filter(c => c.id !== card.id);
+      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
       G.playerInPlay = G.playerInPlay.filter(c => c.id !== card.id);
     } else {
       // Armor equip
       if (G.playerInPlay.find(c => c.id === card.id)) { logMsg('system', `${card.name} is already equipped.`); return; }
       const equippedDefense = G.playerInPlay.filter(c => c.type === 'defense' && c.healAmount === 0).length;
       if (equippedDefense >= 2) { logMsg('system', `You can only have 2 defensive items equipped at a time. Unequip one first.`); return; }
-      G.playerHand   = G.playerHand.filter(c => c.id !== card.id);
+      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
       G.playerInPlay.push(card);
       logMsg('player', `You equip ${card.name} (${card.defense} def, ${card.durability} dur).`);
     }
 
     G.playerActedThisPhase = true;
-    G.selectedCard         = null;
+    G.selectedCard = null;
     checkPhaseComplete();
     render();
   }
@@ -612,7 +614,7 @@ function playerPlayCard(card) {
 function playerPlaySelectedCard() {
   if (!G.selectedCard) return;
   const card = G.playerHand.find(c => c.id === G.selectedCard)
-            || G.playerInPlay.find(c => c.id === G.selectedCard);
+    || G.playerInPlay.find(c => c.id === G.selectedCard);
   if (!card) { logMsg('system', 'Card not found.'); return; }
   playerPlayCard(card);
 }
@@ -621,7 +623,7 @@ function playerPlaySelectedCard() {
 
 /** Toggles the battle-log panel open/closed. */
 function toggleLog() {
-  const log   = document.getElementById('log');
+  const log = document.getElementById('log');
   const arrow = document.getElementById('log-toggle-arrow');
   if (!log) return;
   const collapsed = log.classList.toggle('collapsed');
@@ -642,8 +644,8 @@ function logMsg(type, text) {
 
   const el = document.getElementById('log');
   if (!el) return;
-  const div       = document.createElement('div');
-  div.className   = `log-entry log-${type} new-entry`;
+  const div = document.createElement('div');
+  div.className = `log-entry log-${type} new-entry`;
   div.textContent = text;
 
   const slim = document.getElementById('slim-log');
