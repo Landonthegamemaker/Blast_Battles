@@ -1,8 +1,21 @@
 /**
  * ai-bot.js - A simple AI bot for a game, implemented in JavaScript.
- * This bot will make decisions based on the current game state and perform actions accordingly.
- * The bot's behavior can be customized by modifying the decision-making logic.
- * Dependencies: 
+ * Dependencies (must load first): data.js, utils.js, grid.js, combat.js, game-state.js
+ * Exports (browser globals):
+ * G (global state),
+ * PHASES,
+ * applyRangeMultiplier (from combat.js),
+ * applyBotWeaponBuff (from combat.js),
+ * applyLocationDamageBuff (from combat.js),
+ * applyPlayerArmor (from combat.js),
+ * getDistance (from grid.js),
+ * getReachableForChar (from grid.js),
+ * rand (from utils.js),
+ * logMsg (from utils.js),
+ * render (from utils.js),
+ * checkWin (from game-state.js),
+ * advancePhase (from game-state.js),
+ * healBot (from game-state.js)
  */
 'use strict';
 
@@ -70,7 +83,6 @@ async function loadOnnxModel() {
         ortSession = null;
     }
 }
-
 
 function buildObsVector() {
     // Mirror Python _obs() — OBS_DIM=101
@@ -266,24 +278,6 @@ function botRevealCard(cardId) {
     G.botRevealedCard = cardId;
     render();
     setTimeout(() => { G.botRevealedCard = null; render(); }, 5000);
-}
-
-// Tactical Tim X-Ray: reveal a random hidden bot card for 5 seconds (costs action)
-function playerXray() {
-    if (G.gameOver || G.playerActedThisPhase || G.xrayUsedThisPhase) return;
-    if (G.playerChar.attribute !== 'tactical_xray') return;
-    const hiddenCards = G.botHand.filter(c => c.id !== G.botRevealedCard);
-    if (hiddenCards.length === 0) {
-        logMsg('system', `No hidden bot cards to scan.`); return;
-    }
-    const card = hiddenCards[Math.floor(Math.random() * hiddenCards.length)];
-    G.xrayUsedThisPhase = true;
-    G.playerActedThisPhase = true;
-    logMsg('player', `🔍 ${G.playerChar.name} scans the enemy — reveals: ${card.name}!`);
-    G.botRevealedCard = card.id;
-    render();
-    setTimeout(() => { G.botRevealedCard = null; render(); }, 5000);
-    checkPhaseComplete();
 }
 
 function botPlayPhase() {
@@ -490,7 +484,7 @@ function _botFireWeapon(weapon, dist) {
 
 // Smart bot movement — called at start of each phase before bot plays a card
 function botMoveSmart() {
-    const phase = PHASES[G.phase];  // declared first — was referenced before declaration previously
+    const phase = PHASES[G.phase];
     const isSwift = G.botChar.attribute === 'swift';
     const steps = isSwift ? (phase === 'fast' ? 2 : 1) : 1;
 
@@ -673,45 +667,3 @@ function botMoveSmart() {
 }
 
 function botMove() { botMoveSmart(); } // legacy alias
-
-function skipPhase() {
-    if (G.playerActedThisPhase) return;
-    // If awaiting scrap choice, dismiss it without discarding then continue the skip
-    if (G.awaitingScrapChoice) {
-        G.awaitingScrapChoice = false;
-        logMsg('system', 'You pass on the Scrap Heap.');
-    }
-    logMsg('player', 'You skip this phase.');
-    G.awaitingMove = false;
-    G.playerActedThisPhase = true;
-    checkPhaseComplete();
-    render();
-}
-
-function checkPhaseComplete() {
-    if (G.playerActedThisPhase && G.botActedThisPhase) {
-        advancePhase();
-        return;
-    }
-    // Player acted first — now bot takes its turn
-    if (G.playerActedThisPhase && !G.botActedThisPhase) {
-        const currentPhaseName = PHASES[G.phase]?.name?.toLowerCase();
-        const playerAutoSkipped = G.playerChar.attribute === 'explosive_specialist' && currentPhaseName === 'fast';
-        if (playerAutoSkipped) {
-            G.playerAutoSkippedPhase = true;
-            checkPhaseComplete();
-            return;
-        }
-        setTimeout(() => {
-            botMoveSmart();
-            if (G.difficulty === 'impossible') {
-                impossibleBotPlayPhase(); G.botActedThisPhase = true; render(); checkWin(); if (!G.gameOver) advancePhase();
-            } else {
-                botPlayPhase();
-                G.botActedThisPhase = true;
-                render(); checkWin();
-                if (!G.gameOver) advancePhase();
-            }
-        }, 500);
-    }
-}
