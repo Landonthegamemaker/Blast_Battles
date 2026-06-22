@@ -1,6 +1,7 @@
 /**
- * ai-bot.js - A simple AI bot for a game, implemented in JavaScript.
- * Dependencies (must load first): data.js, utils.js, grid.js, combat.js, game-state.js
+ * Name: ai-bot.js
+ * Description: A simple AI bot for a game, implemented in JavaScript.
+ * Dependencies (must load first): utils.js, grid.js, combat.js, game-state.js
  * Exports (browser globals):
  * G (global state),
  * PHASES,
