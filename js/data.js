@@ -123,7 +123,7 @@ const CHARACTER_POOL = [
   { id: 'c15', name: 'Hank the Tank',    type: 'character', faction: 'villain', hp: 220, maxHp: 220, speed: 3,  attribute: 'explosive_specialist',  attrDesc: 'Explosive +40% dmg · Too slow for Fast phase',                     icon: '💥',   img: 'img/char/hank_the_tank.png' },
 ];
 
-// ── Location cards (25 for 5×5 grid) ────────────────────────────────────────
+// ── Location cards (49 for 7×7 grid) ────────────────────────────────────────
 const LOCATION_POOL = [
   { id: 'l1',  name: 'Neutral Zone',   effect: 'neutral',      effectDesc: 'No special effect',          icon: '⬜', css: 'neutral'      },
   { id: 'l2',  name: 'Hero Sanctum',   effect: 'hero_zone',    effectDesc: '+25% dmg for heroes',        icon: '🦸', css: 'hero-zone'    },
@@ -150,4 +150,28 @@ const LOCATION_POOL = [
   { id: 'l23', name: 'Watch Tower',    effect: 'sniper_nest',  effectDesc: 'Snipers +33% dmg here',      icon: '👀', css: 'buff'         },
   { id: 'l24', name: 'Tech Lab',       effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🔬', css: 'buff'         },
   { id: 'l25', name: 'Safe Room',      effect: 'draw_defense', effectDesc: 'Draw defense card',          icon: '🔒', css: 'buff'         },
+  { id: 'l26', name: 'Abandoned Mine', effect: 'neutral',      effectDesc: 'No special effect',          icon: '⛏️', css: 'neutral'      },
+  { id: 'l27', name: 'Toxic Swamp',    effect: 'radiation',    effectDesc: '-5 HP per phase here',       icon: '🦠', css: 'danger'       },
+  { id: 'l28', name: 'Barricade',      effect: 'neutral',      effectDesc: 'No special effect',          icon: '🚧', css: 'neutral'      },
+  { id: 'l29', name: 'Armory Vault',   effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🗄️', css: 'buff'         },
+  { id: 'l30', name: 'Medical Bay',    effect: 'draw_defense', effectDesc: 'Draw defense card',          icon: '🏨', css: 'buff'         },
+  { id: 'l31', name: 'Hero Hideout',   effect: 'hero_zone',    effectDesc: '+25% dmg for heroes',        icon: '🦸‍♂️', css: 'hero-zone'    },
+  { id: 'l32', name: 'Evil Lair',   effect: 'villain_zone', effectDesc: '+25% dmg for villains',      icon: '🦹‍♂️', css: 'villain-zone' },
+  { id: 'l33', name: 'Pawn Shop',   effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🧰', css: 'buff'         },
+  { id: 'l34', name: 'First Aid Tent', effect: 'draw_defense', effectDesc: 'Draw defense card',          icon: '⛑️', css: 'buff'         },
+  { id: 'l35', name: 'Sunny Meadow', effect: 'hero_zone',    effectDesc: '+25% dmg for heroes',        icon: '🌻', css: 'hero-zone'    },
+  { id: 'l36', name: 'Shadow Alley', effect: 'villain_zone', effectDesc: '+25% dmg for villains',      icon: '🌘', css: 'villain-zone' },
+  { id: 'l37', name: 'Weapon Cache', effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🧨', css: 'buff'         },
+  { id: 'l38', name: 'Defense Depot', effect: 'draw_defense', effectDesc: 'Draw defense card',          icon: '🛡️', css: 'buff'         },
+  { id: 'l39', name: 'Radiation Field', effect: 'radiation',    effectDesc: '-5 HP per phase here',       icon: '☢️', css: 'danger'       },
+  { id: 'l40', name: 'Open Plains', effect: 'neutral',      effectDesc: 'No special effect',          icon: '🌾', css: 'neutral'      },
+  { id: 'l41', name: 'Sniper Tower', effect: 'sniper_nest',  effectDesc: 'Snipers +33% dmg here',      icon: '🏹', css: 'buff'         },
+  { id: 'l42', name: 'Crash Zone', effect: 'neutral',      effectDesc: 'No special effect',          icon: '💥', css: 'neutral'      },
+  { id: 'l43', name: 'Observation Deck', effect: 'sniper_nest',  effectDesc: 'Snipers +33% dmg here',      icon: '🔭', css: 'buff'         },
+  { id: 'l44', name: 'Research Lab', effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🦠', css: 'buff'         },
+  { id: 'l45', name: 'Clinic', effect: 'draw_defense', effectDesc: 'Draw defense card',          icon: '🏥', css: 'buff'         },
+  { id: 'l46', name: 'Abandoned Office', effect: 'neutral',      effectDesc: 'No special effect',          icon: '⬜', css: 'neutral'      },
+  { id: 'l47', name: 'Nuclear Plant', effect: 'radiation',    effectDesc: '-5 HP per phase here',       icon: '🏭', css: 'danger'       },
+  { id: 'l48', name: 'Barricade Zone', effect: 'draw_defense',      effectDesc: 'Draw defense card',          icon: '🚧', css: 'neutral'      },
+  { id: 'l49', name: 'Army Base', effect: 'draw_weapon',  effectDesc: 'Draw weapon card',           icon: '🗄️', css: 'buff'         },
 ];
