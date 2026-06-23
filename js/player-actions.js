@@ -6,6 +6,24 @@
  */
 'use strict';
 
+// Tactical Tim X-Ray: reveal a random hidden bot card for 5 seconds (costs action)
+function playerXray() {
+  if (G.gameOver || G.playerActedThisPhase || G.xrayUsedThisPhase) return;
+  if (G.playerChar.attribute !== 'tactical_xray') return;
+  const hiddenCards = G.botHand.filter(c => c.id !== G.botRevealedCard);
+  if (hiddenCards.length === 0) {
+    logMsg('system', `No hidden bot cards to scan.`); return;
+  }
+  const card = hiddenCards[Math.floor(Math.random() * hiddenCards.length)];
+  G.xrayUsedThisPhase = true;
+  G.playerActedThisPhase = true;
+  logMsg('player', `🔍 ${G.playerChar.name} scans the enemy — reveals: ${card.name}!`);
+  G.botRevealedCard = card.id;
+  render();
+  setTimeout(() => { G.botRevealedCard = null; render(); }, 5000);
+  checkPhaseComplete();
+}
+
 function skipPhase() {
   if (G.playerActedThisPhase) return;
   // If awaiting scrap choice, dismiss it without discarding then continue the skip
