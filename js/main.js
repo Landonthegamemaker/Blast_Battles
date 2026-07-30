@@ -480,33 +480,8 @@ function _rematch() {
   _openSquadBuilder();
 }
 
-// ── logMsg routing ────────────────────────────────────────────────────────────
-// Patch the logMsg from game-state.js so player/bot messages
-// also appear in the dual play-by-play logs.
-
-const _origLogMsg = typeof logMsg === 'function' ? logMsg : null;
-
-function logMsg(type, text) {
-  // Write to the main G.log and the slim center log (from game-state.js)
-  if (_origLogMsg) _origLogMsg(type, text);
-
-  // Route to dual play-by-play panels
-  if (type === 'player' || type === 'heal' && text.includes('You')) {
-    logPlayerMsg(text, type);
-  } else if (type === 'bot') {
-    logBotMsg(text, type);
-  } else if (type === 'damage') {
-    // Damage to player → player log; damage to bot → bot log
-    const toBot = text.includes('bot') || text.includes('Bot') ||
-                  (G.botSquad && G.botSquad.some(b => text.includes(b.name)));
-    if (toBot) logBotMsg(text, type);
-    else       logPlayerMsg(text, type);
-  } else {
-    // System / phase messages go to both logs
-    logPlayerMsg(text, type);
-    logBotMsg(text, type);
-  }
-}
+// logMsg routing is handled inside game-state.js directly.
+// No patch needed here.
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
