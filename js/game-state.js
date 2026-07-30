@@ -1,656 +1,541 @@
 /**
- * game-state.js — Blast Battles game state management & phase engine
- * Dependencies (must load first): data.js, utils.js, grid.js, combat.js
- * Reads/writes the global `G` object.
- * Calls: render() (render.js), updateHint() (render.js),
- *        botMoveSmart() (ai-bot.js), botPlayPhase() (ai-bot.js),
- *        impossibleBotPlayPhase() (ai-bot.js), loadOnnxModel() (ai-bot.js)
+ * game-state.js — Blast Battles revamp game state & turn engine
+ * Dependencies: data.js, utils.js, grid.js, combat.js
+ *
+ * Turn model:
+ *   - Each round both sides receive +1 Energy (scales: round 1 = 1, round 2 = 2, etc., cap at 10)
+ *   - Speed determines act-order within the round (highest Speed acts first)
+ *   - Ties in Speed broken by coin flip at round start
+ *   - Player gets 20s to act; bot acts instantly on its turn
+ *   - Round cap: MAX_TURNS (15). Tiebreaker: HP remaining + Blasters alive.
  *
  * Exports (browser globals):
- *   startWithDifficulty(diff)
- *   initGame()
- *   startPhase()
- *   advancePhase()
- *   checkPhaseComplete()
- *   skipPhase()
- *   clearPhaseTimer()
- *   startPhaseTimer()
- *   updateTimerDisplay()
- *   getPhaseSpeed()
- *   updatePhaseSpeed(val)
- *   hasAnyPlayableCard()
- *   playerPlayCard(card)
- *   playerPlaySelectedCard()
- *   toggleLog()
+ *   G                        — live game state object
+ *   initGame(squadConfig)    — starts a new match
+ *   startRound()             — begins a new round
+ *   startBlasterTurn(side, blasterIndex)
+ *   endBlasterTurn(side)
+ *   spendEnergy(side, blasterIndex, amount) → boolean
+ *   tickActionTimer()
+ *   clearActionTimer()
+ *   checkWin()
+ *   endGame(winner)
  *   logMsg(type, text)
- *   _selectedCharId   (mutable — set by char-select.js)
+ *   saveEndurance()          — persists Endurance to localStorage
+ *   loadEndurance()          — restores Endurance from localStorage
  */
 
 'use strict';
 
-// ── Mutable globals ──────────────────────────────────────────────────────────
-/** G is the live game state object. It gets reset each match; see initGame() for structure*/
-let G = {};
+// ── Live game state ───────────────────────────────────────────────────────────
 
-/** Set by char-select.js when the player confirms their character. */
-let _selectedCharId = null;
+let G = {
+  round:            1,
+  energyPool:       1,       // current round Energy allotment (both sides)
+  playerSquad:      [],      // array of 5 live Blaster state objects
+  botSquad:         [],
+  playerEnergy:     0,       // squad shared Energy this round
+  botEnergy:        0,
+  actOrder:         [],      // [{ side, idx }] sorted by Speed for this round
+  actOrderIndex:    0,       // pointer into actOrder
+  locations:        [],      // 25 tile location objects
+  playerPositions:  [],      // tile index per Blaster (player squad)
+  botPositions:     [],
+  selectedBlaster:  null,    // { side, idx } currently acting
+  gameOver:         false,
+  log:              [],
+  matchStartTime:   Date.now(),
+  playerDmgDealt:   0,
+  botDmgDealt:      0,
+  playerHealTotal:  0,
+  botHealTotal:     0,
+  consumableSlots:  CONSUMABLE_SLOTS_START,
+  playerConsumables:[],
+  botConsumables:   [],
+  difficulty:       'medium',
+};
 
-/** Phase timer state */
-const PHASE_DURATIONS = { fast: 15, medium: 15, slow: 15, charged: 15 };
-let _phaseTimerInterval = null;
-let _phaseTimeLeft = 15;
-let _autoCheckTimeout = null;
+// ── Action timer state ────────────────────────────────────────────────────────
 
-// ── Difficulty entry point ────────────────────────────────────────────────────
+let _actionTimerInterval = null;
+let _actionTimeLeft      = 20;
+
+// ── Endurance persistence ─────────────────────────────────────────────────────
+
+function saveEndurance() {
+  const data = {};
+  [...G.playerSquad, ...G.botSquad].forEach(b => {
+    data[b.id] = b.endurance;
+  });
+  try { localStorage.setItem('bb_endurance', JSON.stringify(data)); } catch(e) {}
+}
+
+function loadEndurance() {
+  try {
+    const raw = localStorage.getItem('bb_endurance');
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
+}
+
+// ── Squad builder helper ──────────────────────────────────────────────────────
 
 /**
- * Called when the player selects a difficulty on the overlay.
- * Loads the ONNX model for 'impossible' difficulty, then starts the game.
+ * Converts a raw Blaster definition from BLASTER_POOL into a live match object.
+ * Applies saved Endurance from localStorage.
  *
- * @param {'easy'|'medium'|'hard'|'impossible'} diff
+ * @param {object} blasterDef  — entry from BLASTER_POOL
+ * @param {object} savedEndurance — { [id]: currentEndurance }
+ * @returns {object} live Blaster state
  */
-async function startWithDifficulty(diff) {
-  G.difficulty = diff;
-  document.getElementById('difficulty-overlay').classList.add('hidden');
-  if (diff === 'impossible') await loadOnnxModel();
-  initGame();
+function makeLiveBlaster(blasterDef, savedEndurance) {
+  const b = deepClone(blasterDef);
+  b.hp          = b.health;
+  b.maxHp       = b.health;
+  b.energy      = 0;          // starts at 0 each match; filled by round allotment
+  b.maxEnergy   = b.stamina;  // Stamina = Energy ceiling
+  b.ko          = false;
+  b.buffs       = [];         // active buffs: [{ effect, turnsLeft }]
+  b.weapon      = null;       // equipped weapon (from WEAPON_POOL)
+  b.armor       = [];         // equipped armor (up to 4 slots)
+  b.gadget      = null;       // equipped gadget (from GADGET_POOL)
+  b.abilityUsed = false;      // resets each round
+  b.actedThisRound = false;
+  // Restore persistent Endurance
+  if (savedEndurance[b.id] !== undefined) {
+    b.endurance = savedEndurance[b.id];
+  }
+  return b;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 /**
- * Resets all game state and starts a new match.
- * Called on first load (after char select) and on rematch.
+ * Starts a new match.
+ *
+ * @param {{
+ *   playerSquad: string[],   — array of 5 Blaster IDs chosen by the player
+ *   difficulty: string,
+ *   consumableSlots: number,
+ *   playerConsumables: string[],  — consumable IDs
+ * }} config
  */
-function initGame() {
-  document.getElementById('modal-overlay').classList.add('hidden');
+function initGame(config) {
+  document.getElementById('modal-overlay')?.classList.add('hidden');
 
-  // Reset phase speed slider to 1×
-  const slider = document.getElementById('phase-speed-slider');
-  if (slider) { slider.value = 1; updatePhaseSpeed(1); }
+  const saved = loadEndurance();
 
-  // Fresh shuffled decks
-  const weaponDeck = shuffle(deepClone(WEAPON_POOL));
-  const defenseDeck = shuffle(deepClone(DEFENSE_POOL));
-  const charPool = shuffle(deepClone(CHARACTER_POOL));
+  // Build live squads
+  const playerDefs = config.playerSquad.map(id => BLASTER_POOL.find(b => b.id === id));
+  const botDefs    = _buildBotSquad(config.difficulty, playerDefs);
 
-  // Use player's selected character; bot gets a random from the opposite faction
-  const selectedChar = CHARACTER_POOL.find(c => c.id === _selectedCharId);
-  if (!selectedChar && !charPool[0]) {
-    console.error('No characters available in pool. Check CHARACTER_POOL is populated.');
-    return;
-  }
-  const playerChar = deepClone(selectedChar || charPool[0]);
-  const oppFaction = playerChar.faction === 'hero' ? 'villain' : 'hero';
-  const botCandidates = charPool.filter(c => c.faction === oppFaction && c.id !== playerChar.id);
-  const botChar = deepClone(botCandidates[0] || charPool.find(c => c.id !== playerChar.id));
-
-  // The Shadow: mirrors the opponent's attribute, speed, and HP
-  function applyShadowMirror(shadow, mirror) {
-    shadow.attribute = mirror.attribute;
-    shadow.speed = mirror.speed;
-    shadow.hp = mirror.maxHp;
-    shadow.maxHp = mirror.maxHp;
-    shadow.name = `Dark ${mirror.name}`;
-    const parts = mirror.attrDesc.split(' · ');
-    shadow.attrDesc = `Same HP & ${parts[0]}` + (parts[1] ? ` · Always acts after bot` : ' · Always acts after bot');
-  }
-  if (botChar.attribute === 'shadow_clone') applyShadowMirror(botChar, playerChar);
-  if (playerChar.attribute === 'shadow_clone') applyShadowMirror(playerChar, botChar);
-
-  // Starter hand — 1 thematic weapon + 1 defense card (or 2nd weapon for Pete/Tracy)
-  function starterDeck(char, wDeck, dDeck) {
-    const attr = char.attribute;
-    const subtypeMap = {
-      dual_wield: 'pistol',
-      deadeye: 'revolver',
-      pistol_specialist: 'pistol',
-      revolver_specialist: 'revolver',
-      shotgun_specialist: 'shotgun',
-      rifle_specialist: 'assault_rifle',
-      sniper_specialist: 'sniper',
-      melee_specialist: 'melee',
-      swift_melee: 'melee',
-      explosive_specialist: 'explosive',
-    };
-    const preferredSubtype = subtypeMap[attr];
-
-    let weapon = null;
-    if (preferredSubtype) {
-      const idx = wDeck.findIndex(c => c.subtype === preferredSubtype);
-      if (idx !== -1) weapon = wDeck.splice(idx, 1)[0];
-    }
-    if (!weapon) {
-      const fallbackSubtype = attr === 'swift_melee' ? 'melee'
-        : ['swift', 'extra_carry'].includes(attr) ? 'pistol'
-          : 'assault_rifle';
-      const idx = wDeck.findIndex(c => c.subtype === fallbackSubtype);
-      weapon = idx !== -1 ? wDeck.splice(idx, 1)[0] : wDeck.shift();
-    }
-
-    let defense = null;
-    if (attr === 'extra_carry' || attr === 'dual_wield') {
-      if (attr === 'dual_wield') {
-        // Pistol Pete: clone his first pistol for the paired slot
-        const clone = deepClone(weapon);
-        clone.id = clone.id + '_clone_' + Math.random().toString(36).slice(2, 7);
-        const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
-        weapon.dualWieldPairId = pairId;
-        clone.dualWieldPairId = pairId;
-        defense = clone;
-      } else {
-        defense = wDeck.length > 0 ? deepClone(wDeck.shift()) : null;
-      }
-    } else {
-      const defSubtypeMap = {
-        healing: 'syringe',
-        heavy_armor: 'plate_armor',
-        sniper_resist: 'plate_armor',
-        run_and_gun: 'helmet',
-      };
-      const preferredDef = defSubtypeMap[attr];
-      if (preferredDef) {
-        const idx = dDeck.findIndex(c => c.subtype === preferredDef);
-        if (idx !== -1) defense = dDeck.splice(idx, 1)[0];
-      }
-      if (!defense) defense = dDeck.shift();
-    }
-    return [deepClone(weapon), deepClone(defense)];
-  }
-
-  const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
-  const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
-
-  // 7×7 grid — center tile always neutral
-  const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 49);
-  locs[24] = deepClone({
-    id: 'lCenter', name: 'Central Ground', effect: 'neutral',
-    effectDesc: 'No special effect', icon: '⬜', css: 'neutral'
+  // Drain Endurance on match start (meta-layer)
+  playerDefs.forEach(def => {
+    if (saved[def.id] !== undefined) saved[def.id] = Math.max(0, saved[def.id] - ENDURANCE_COST_PER_MATCH);
+    else saved[def.id] = Math.max(0, def.endurance - ENDURANCE_COST_PER_MATCH);
   });
 
-  // Reset G — player starts top-left (0), bot starts bottom-right (48)
+  const playerSquad = playerDefs.map(def => makeLiveBlaster(def, saved));
+  const botSquad    = botDefs.map(def => makeLiveBlaster(def, {}));
+
+  // Assign default weapons (first weapon in pool matching squad diversity)
+  playerSquad.forEach((b, i) => { b.weapon = deepClone(WEAPON_POOL[i % WEAPON_POOL.length]); });
+  botSquad.forEach((b, i)    => { b.weapon = deepClone(WEAPON_POOL[(i + 2) % WEAPON_POOL.length]); });
+
+  // 5×5 grid — center always neutral
+  const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 25);
+  locs[12] = { id: 'lCenter', name: 'Central Ground', effect: 'neutral', effectDesc: 'No special effect', icon: '⬜', css: 'neutral' };
+
+  // Starting positions: player squad top row (0–4), bot squad bottom row (20–24)
+  const playerPositions = [0, 1, 2, 3, 4];
+  const botPositions    = [20, 21, 22, 23, 24];
+
   G = {
-    turn: 1,
-    phase: 0,
-    difficulty: G.difficulty || 'medium',
-    playerChar: deepClone(playerChar),
-    botChar: deepClone(botChar),
-    playerHand,
-    botHand,
-    playerInPlay: [],
-    botInPlay: [],
-    playerPos: 0,
-    botPos: 48,
-    locations: locs,
-    weaponDeck,
-    defenseDeck,
-    selectedCard: null,
-    playerActedThisPhase: false,
-    botActedThisPhase: false,
-    awaitingMove: false,
-    awaitingScrapChoice: false,
-    playerMovedThisPhase: false,
-    xrayUsedThisPhase: false,
-    dualWieldFiredIds: new Set(),
-    playerToxicTurns: 0,
-    botToxicTurns: 0,
-    gameOver: false,
-    log: [],
-    botRevealedCard: null,
-    playerDmgDealt: 0,
-    botDmgDealt: 0,
-    playerHealTotal: 0,
-    botHealTotal: 0,
-    lastKillingBlow: null,
-    matchStartTime: Date.now(),
+    round:            1,
+    energyPool:       1,
+    playerSquad,
+    botSquad,
+    playerEnergy:     1,
+    botEnergy:        1,
+    playerEnergyBank: 0,   // carry token — banked from previous rounds
+    botEnergyBank:    0,
+    actOrder:         [],
+    actOrderIndex:    0,
+    locations:        locs,
+    playerPositions,
+    botPositions,
+    selectedBlaster:  null,
+    gameOver:         false,
+    log:              [],
+    matchStartTime:   Date.now(),
+    playerDmgDealt:   0,
+    botDmgDealt:      0,
+    playerHealTotal:  0,
+    botHealTotal:     0,
+    consumableSlots:  config.consumableSlots || CONSUMABLE_SLOTS_START,
+    playerConsumables: (config.playerConsumables || []).map(id => deepClone(CONSUMABLE_POOL.find(c => c.id === id))),
+    botConsumables:   [],
+    difficulty:       config.difficulty || 'medium',
   };
 
-  logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
-  logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
-  logMsg('system', `You start at ${G.locations[G.playerPos].name} (top-left). Bot starts at ${G.locations[G.botPos].name} (bottom-right).`);
-  if (G.botChar.name.startsWith('Dark ')) {
-    logMsg('system', `🥷 ${G.botChar.name} has mirrored ${G.playerChar.name} — same ability, same weakness!`);
-  } else if (G.playerChar.name.startsWith('Dark ')) {
-    logMsg('system', `🥷 You play as ${G.playerChar.name} — mirroring ${G.botChar.name}'s ability and weakness!`);
-  }
+  saveEndurance();
+
+  logMsg('system', `=== BLAST BATTLES — Round 1 [${G.difficulty.toUpperCase()}] ===`);
+  logMsg('system', `Your squad: ${playerSquad.map(b => b.name).join(', ')}`);
+  logMsg('system', `Bot squad:  ${botSquad.map(b => b.name).join(', ')}`);
 
   render();
-  BB_Audio.startGameplay(G.playerChar.id);
-  startPhase();
+  startRound();
 }
 
-// ── Phase management ──────────────────────────────────────────────────────────
+// ── Bot squad builder ─────────────────────────────────────────────────────────
 
 /**
- * Starts the current phase (G.phase / G.turn are already set).
- * - Resets per-phase flags
- * - Applies location effects
- * - Determines who acts first (by speed)
- * - Launches the bot if it goes first
- * - Starts the auto-skip timer
+ * Builds a bot squad of 5 Blasters scaled to difficulty.
+ * easy:       random low-stat Blasters
+ * medium:     random balanced Blasters opposite faction where possible
+ * hard:       highest-stat Blasters available
+ * impossible: mirrors player squad stat totals exactly
  */
-function startPhase() {
-  G.playerActedThisPhase = false;
-  G.botActedThisPhase = false;
-  G.selectedCard = null;
-  G.awaitingMove = false;
-  G.awaitingScrapChoice = false;
-  G.playerMovedThisPhase = false;
-  G.xrayUsedThisPhase = false;
-  G.dualWieldFiredIds = new Set();
-  clearPhaseTimer();
+function _buildBotSquad(difficulty, playerDefs) {
+  const pool = deepClone(BLASTER_POOL);
 
-  const phase = PHASES[G.phase];
-  logMsg('phase', `— ${phase.toUpperCase()} PHASE — (move OR play a card)`);
+  // Prefer opposite alignment
+  const playerAlignments = new Set(playerDefs.map(b => b.alignment));
+  const opposite = b =>
+    (playerAlignments.has('hero')    && b.alignment === 'villain') ||
+    (playerAlignments.has('villain') && b.alignment === 'hero')    ||
+    b.alignment === 'neutral' || b.alignment === 'flex';
 
-  // Location effects — damage/heal every phase; card draws on medium/charged
-  const isFirstPhase = G.turn === 1 && G.phase === 0;
-  const isCardDrawPhase = phase === 'medium' || phase === 'charged';
-  if (!isFirstPhase) applyLocationEffects(isCardDrawPhase);
+  const statTotal = b => b.speed + b.stamina + b.strength + b.health / 10 + b.endurance;
+
+  let candidates;
+  if (difficulty === 'easy') {
+    candidates = pool.sort((a, b) => statTotal(a) - statTotal(b));
+  } else if (difficulty === 'hard' || difficulty === 'impossible') {
+    candidates = pool.sort((a, b) => statTotal(b) - statTotal(a));
+  } else {
+    candidates = shuffle(pool.filter(opposite));
+    if (candidates.length < 5) candidates = shuffle(pool);
+  }
+
+  return candidates.slice(0, 5);
+}
+
+// ── Round management ──────────────────────────────────────────────────────────
+
+/**
+ * Begins a new round.
+ * - Calculates Energy allotment (round number, cap 10)
+ * - Distributes Energy to both squads
+ * - Sorts act order by Speed (ties broken randomly)
+ * - Kicks off the first Blaster's turn
+ */
+function startRound() {
+  if (G.gameOver) return;
+
+  // Energy allotment scales with round number, capped at 10
+  // Banked Energy (carry token) is added on top of the fresh allotment
+  G.energyPool   = Math.min(G.round, 10);
+  G.playerEnergy = G.energyPool + (G.playerEnergyBank || 0);
+  G.botEnergy    = G.energyPool + (G.botEnergyBank    || 0);
+  // Clear the bank after distributing it
+  G.playerEnergyBank = 0;
+  G.botEnergyBank    = 0;
+
+  // Reset per-round flags
+  G.playerSquad.forEach(b => { b.actedThisRound = false; b.abilityUsed = false; });
+  G.botSquad.forEach(b    => { b.actedThisRound = false; b.abilityUsed = false; });
+
+  // Tick down buff durations
+  [...G.playerSquad, ...G.botSquad].forEach(b => {
+    b.buffs = b.buffs
+      .map(buf => ({ ...buf, turnsLeft: buf.turnsLeft - 1 }))
+      .filter(buf => buf.turnsLeft > 0);
+  });
+
+  logMsg('phase', `— Round ${G.round} — Energy: ${G.energyPool} —`);
+
+  // Build act order: all non-KO'd Blasters sorted by Speed desc, ties shuffled
+  const entries = [];
+  G.playerSquad.forEach((b, i) => { if (!b.ko) entries.push({ side: 'player', idx: i, speed: b.speed }); });
+  G.botSquad.forEach((b, i)    => { if (!b.ko) entries.push({ side: 'bot',    idx: i, speed: b.speed }); });
+
+  // Shuffle first to randomise ties, then stable-sort by speed desc
+  const shuffled = shuffle(entries);
+  G.actOrder      = shuffled.sort((a, b) => b.speed - a.speed);
+  G.actOrderIndex = 0;
+
+  render();
+  _nextTurn();
+}
+
+/**
+ * Advances to the next Blaster in the act order.
+ * Skips KO'd Blasters. When all have acted, advances the round.
+ */
+function _nextTurn() {
+  if (G.gameOver) return;
+
+  // Skip already-acted or KO'd slots
+  while (G.actOrderIndex < G.actOrder.length) {
+    const { side, idx } = G.actOrder[G.actOrderIndex];
+    const squad = side === 'player' ? G.playerSquad : G.botSquad;
+    if (!squad[idx].ko && !squad[idx].actedThisRound) break;
+    G.actOrderIndex++;
+  }
+
+  if (G.actOrderIndex >= G.actOrder.length) {
+    // All Blasters acted — end of round
+    _endRound();
+    return;
+  }
+
+  const { side, idx } = G.actOrder[G.actOrderIndex];
+  startBlasterTurn(side, idx);
+}
+
+/**
+ * Ends the current round, checks win condition, advances to next round.
+ * Carries over exactly 1 unspent Energy per side into the bank (cap: ENERGY_BANK_CAP).
+ * The bank is separate from the round allotment and displayed as a carry token in the UI.
+ */
+function _endRound() {
   checkWin();
   if (G.gameOver) return;
 
-  // ── Movement gating by character attribute ─────────────────────────────────
-  const isTitanPlayer = G.playerChar.attribute === 'heavy_armor';        // Charged only
-  const isSamPlayer = G.playerChar.attribute === 'shotgun_specialist'; // Slow & Charged
-  const isHuntressPlayer = G.playerChar.attribute === 'sniper_specialist';  // Fast & Medium
-  const isTankPlayer = G.playerChar.attribute === 'explosive_specialist'; // Not Fast
-
-  const heavyMoveOk = !isTitanPlayer || phase === 'charged';
-  const samMoveOk = !isSamPlayer || phase === 'slow' || phase === 'charged';
-  const huntressMoveOk = !isHuntressPlayer || phase === 'fast' || phase === 'medium';
-  const tankMoveOk = !isTankPlayer || phase !== 'fast';
-
-  if (!heavyMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name}'s heavy armor restricts movement to Charged phase only.`);
-  } else if (!samMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name} can only move during Slow & Charged phases.`);
-  } else if (!huntressMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `🎯 ${G.playerChar.name} holds position — can only move on Fast & Medium phases.`);
-  } else if (!tankMoveOk) {
-    // Hank the Tank — fully locked during Fast phase
-    G.awaitingMove = false;
-    G.playerActedThisPhase = true;
-    G.botActedThisPhase = true;
-    G.playerAutoSkippedPhase = true;
-    logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast phase. Holding position...`);
-    setTimeout(() => checkPhaseComplete(), 2000);
-  } else {
-    G.awaitingMove = true;
+  // Bank 1 Energy per side if they have unspent Energy, up to ENERGY_BANK_CAP
+  if (G.playerEnergy > 0) {
+    G.playerEnergyBank = Math.min((G.playerEnergyBank || 0) + 1, ENERGY_BANK_CAP);
+    logMsg('system', `You bank 1 Energy → stored: ${G.playerEnergyBank}/${ENERGY_BANK_CAP}`);
+  }
+  if (G.botEnergy > 0) {
+    G.botEnergyBank = Math.min((G.botEnergyBank || 0) + 1, ENERGY_BANK_CAP);
   }
 
-  // ── Speed-based turn order ─────────────────────────────────────────────────
-  // The Shadow always follows — never acts before the bot
-  const isShadowPlayer = G.playerChar.name.startsWith('Dark ') || G.playerChar.name === 'The Shadow';
-  const effPlayerSpd = getEffectiveSpeed(G.playerChar, G.playerHand, G.playerInPlay);
-  const effBotSpd = getEffectiveSpeed(G.botChar, G.botHand, G.botInPlay);
-  const playerFirst = isShadowPlayer ? false
-    : effPlayerSpd > effBotSpd ? true
-      : effBotSpd > effPlayerSpd ? false
-        : Math.random() < 0.5;
-
-  if (!playerFirst) {
-    setTimeout(() => {
-      if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisPhase = true;
-        render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); }
-      } else {
-        botMoveSmart(); botPlayPhase();
-        G.botActedThisPhase = true;
-        render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); }
-      }
-    }, 500);
-  } else {
-    render();
-    updateHint();
-  }
-
-  startPhaseTimer();
-}
-
-/**
- * Advances to the next phase (or next turn).
- * Applies Sprinting Sue's extra Fast-phase move if applicable.
- * Resets per-phase flags and calls startPhase().
- */
-function advancePhase() {
-  G.phase++;
-  if (G.phase >= PHASES.length) {
-    G.phase = 0;
-    G.turn++;
-    logMsg('system', `=== Turn ${G.turn} ===`);
-  }
-  // Sprinting Sue: on Fast phase she may move an extra space
-  if (G.phase === 0 && G.playerChar.attribute === 'swift') {
-    G.playerMovedThisPhase = false; // fresh flag for the bonus move
-  }
-  startPhase();
-}
-
-/**
- * Checks whether both sides have finished their actions.
- * If the bot hasn't acted yet, triggers its turn now (it goes second).
- * Once both have acted, advances the phase.
- *
- * Bot acting after the player is the "player-first" flow; the bot acting
- * before the player is handled inside startPhase().
- */
-function checkPhaseComplete() {
-  if (G.gameOver) return;
-
-  // If the bot hasn't acted yet, trigger its turn now
-  if (!G.botActedThisPhase) {
-    setTimeout(() => {
-      if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisPhase = true;
-        render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); advancePhase(); }
-      } else {
-        botMoveSmart(); botPlayPhase();
-        G.botActedThisPhase = true;
-        render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); advancePhase(); }
-      }
-    }, 500);
+  if (G.round >= MAX_TURNS) {
+    _resolveTiebreaker();
     return;
   }
 
-  // Both acted — move forward
-  advancePhase();
+  G.round++;
+  startRound();
 }
 
 /**
- * Skips the player's action for the current phase (called by the timer
- * or when the player clicks END TURN without acting).
- * Marks the player as having acted, then calls checkPhaseComplete.
+ * Tiebreaker at round cap: most HP remaining + most Blasters alive wins.
  */
-function skipPhase() {
+function _resolveTiebreaker() {
+  const pAlive  = G.playerSquad.filter(b => !b.ko).length;
+  const bAlive  = G.botSquad.filter(b => !b.ko).length;
+  const pHp     = G.playerSquad.reduce((s, b) => s + b.hp, 0);
+  const bHp     = G.botSquad.reduce((s, b) => s + b.hp, 0);
+  const pScore  = pAlive * 1000 + pHp;
+  const bScore  = bAlive * 1000 + bHp;
+  if      (pScore > bScore) endGame('player');
+  else if (bScore > pScore) endGame('bot');
+  else                      endGame('draw');
+}
+
+// ── Blaster turn ──────────────────────────────────────────────────────────────
+
+/**
+ * Opens the action window for one Blaster.
+ * Bot acts instantly; player gets a 20s timer.
+ *
+ * @param {'player'|'bot'} side
+ * @param {number} idx  — index into playerSquad / botSquad
+ */
+function startBlasterTurn(side, idx) {
   if (G.gameOver) return;
-  G.playerActedThisPhase = true;
-  G.awaitingMove = false;
-  G.awaitingScrapChoice = false;
+  const squad  = side === 'player' ? G.playerSquad : G.botSquad;
+  const b      = squad[idx];
+  G.selectedBlaster = { side, idx };
+
+  // Check Energy lockout
+  const locked = _isEnergyLocked(side, b);
+
+  logMsg(side, `${b.name}'s turn. Energy available: ${side === 'player' ? G.playerEnergy : G.botEnergy}${locked ? ' [LOCKED — low energy]' : ''}`);
+
+  if (side === 'bot') {
+    _botAct(idx, locked);
+    endBlasterTurn('bot');
+    return;
+  }
+
+  // Player turn — start action timer
+  if (locked) {
+    logMsg('system', `${b.name} is energy-locked — skipping turn.`);
+    endBlasterTurn('player');
+    return;
+  }
+
   render();
-  checkPhaseComplete();
-}
-
-// ── Phase timer ───────────────────────────────────────────────────────────────
-
-/** Stops any running phase timer intervals/timeouts. */
-function clearPhaseTimer() {
-  if (_phaseTimerInterval) { clearInterval(_phaseTimerInterval); _phaseTimerInterval = null; }
-  if (_autoCheckTimeout) { clearTimeout(_autoCheckTimeout); _autoCheckTimeout = null; }
-  _phaseTimeLeft = 0;
-}
-
-/** Returns the current phase speed multiplier (1–5) from the slider. */
-function getPhaseSpeed() {
-  const slider = document.getElementById('phase-speed-slider');
-  return slider ? parseInt(slider.value) : 1;
+  _startActionTimer();
 }
 
 /**
- * Updates the phase-speed slider label and fill gradient.
- * @param {number} val - Speed multiplier (1–5)
+ * Returns true if a Blaster is below the energy lockout threshold.
+ * Lockout is based on the *squad* shared energy vs the Blaster's stamina.
+ *
+ * @param {'player'|'bot'} side
+ * @param {object} blaster
+ * @returns {boolean}
  */
-function updatePhaseSpeed(val) {
-  const label = document.getElementById('phase-speed-label');
-  if (label) label.textContent = `${val}x`;
-  const slider = document.getElementById('phase-speed-slider');
-  if (slider) {
-    const pct = ((val - 1) / 4) * 100;
-    slider.style.setProperty('background',
-      `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`);
+function _isEnergyLocked(side, blaster) {
+  const squadEnergy = side === 'player' ? G.playerEnergy : G.botEnergy;
+  return squadEnergy < blaster.stamina * ENERGY_LOCKOUT_THRESHOLD;
+}
+
+/**
+ * Marks the current Blaster as having acted and advances the turn order.
+ * @param {'player'|'bot'} side
+ */
+function endBlasterTurn(side) {
+  clearActionTimer();
+  const { idx } = G.selectedBlaster || {};
+  if (idx !== undefined) {
+    const squad = side === 'player' ? G.playerSquad : G.botSquad;
+    if (squad[idx]) squad[idx].actedThisRound = true;
+  }
+  G.selectedBlaster = null;
+  G.actOrderIndex++;
+  checkWin();
+  if (!G.gameOver) {
+    render();
+    setTimeout(_nextTurn, 400);
   }
 }
 
-/** Returns true if the player has at least one legally playable card this phase. */
-function hasAnyPlayableCard() {
-  const allCards = [
-    ...G.playerHand,
-    ...G.playerInPlay.filter(c => c.type === 'weapon'),
-  ];
-  return allCards.some(c => isCardPlayable(c));
-}
+// ── Energy spending ───────────────────────────────────────────────────────────
 
 /**
- * Starts the countdown timer for the current phase.
- * At speed 1: 15 s.  At speed 5: 3 s.  Timer always reaches 0.
+ * Attempts to spend Energy from the squad pool.
+ * Returns false (and logs a warning) if there isn't enough.
  *
- * Auto-skip behaviour at 0:
- *   • Player already acted → checkPhaseComplete
- *   • Pete fired first shot only → log miss, mark acted, checkPhaseComplete
- *   • speed > 1 and no playable cards → log wait, skipPhase
- *   • otherwise → log "Time up!", skipPhase
+ * @param {'player'|'bot'} side
+ * @param {number} amount
+ * @returns {boolean}
  */
-function startPhaseTimer() {
-  const speed = getPhaseSpeed();
-  const totalSecs = Math.ceil(15 / speed);
-  _phaseTimeLeft = totalSecs;
-  updateTimerDisplay();
+function spendEnergy(side, amount) {
+  if (side === 'player') {
+    if (G.playerEnergy < amount) {
+      logMsg('system', `Not enough Energy — need ${amount}, have ${G.playerEnergy}.`);
+      return false;
+    }
+    G.playerEnergy -= amount;
+  } else {
+    if (G.botEnergy < amount) return false;
+    G.botEnergy -= amount;
+  }
+  return true;
+}
 
-  if (_autoCheckTimeout) clearTimeout(_autoCheckTimeout);
+// ── Action timer ──────────────────────────────────────────────────────────────
 
-  _phaseTimerInterval = setInterval(() => {
-    _phaseTimeLeft--;
-    updateTimerDisplay();
-    if (_phaseTimeLeft <= 0) {
-      clearPhaseTimer();
-      if (G.gameOver) return;
-
-      if (G.playerActedThisPhase) {
-        checkPhaseComplete();
-      } else if (G.dualWieldFiredIds && G.dualWieldFiredIds.size > 0) {
-        // Pete fired first shot but ran out of time before the second
-        logMsg('system', '⏱ Time up! Second shot missed.');
-        G.playerActedThisPhase = true;
-        checkPhaseComplete();
-        render();
-      } else if (speed > 1 && !hasAnyPlayableCard()) {
-        logMsg('system', `${G.playerChar.name} waits patiently for ${G.botChar.name}'s next play.`);
-        skipPhase();
-      } else {
-        logMsg('system', '⏱ Time up!');
-        skipPhase();
-      }
+function _startActionTimer() {
+  _actionTimeLeft = 20;
+  _updateTimerDisplay();
+  _actionTimerInterval = setInterval(() => {
+    _actionTimeLeft--;
+    _updateTimerDisplay();
+    if (_actionTimeLeft <= 0) {
+      clearActionTimer();
+      logMsg('system', '⏱ Time up — turn skipped.');
+      endBlasterTurn('player');
     }
   }, 1000);
 }
 
-/** Updates the on-screen phase timer display (colour changes as time runs low). */
-function updateTimerDisplay() {
-  const el = document.getElementById('phase-timer');
+function clearActionTimer() {
+  if (_actionTimerInterval) { clearInterval(_actionTimerInterval); _actionTimerInterval = null; }
+  _actionTimeLeft = 0;
+}
+
+function _updateTimerDisplay() {
+  const el = document.getElementById('action-timer');
   if (!el) return;
-  el.textContent = `⏱ ${_phaseTimeLeft}s`;
-  el.style.color = _phaseTimeLeft <= 5 ? 'var(--accent2)'
-    : _phaseTimeLeft <= 10 ? 'var(--medium)'
-      : 'var(--muted)';
+  el.textContent = `⏱ ${_actionTimeLeft}s`;
+  el.style.color = _actionTimeLeft <= 5  ? 'var(--accent2)'
+    : _actionTimeLeft <= 10 ? 'var(--medium)'
+    : 'var(--muted)';
 }
 
-// ── Card play (player) ────────────────────────────────────────────────────────
+// ── Bot AI (placeholder — expanded in ai-bot.js) ─────────────────────────────
 
 /**
- * Executes the player's chosen card action (fire weapon or equip/use defense).
- * Validates all restrictions, applies damage/heal, updates ammo/durability,
- * handles Dual Wield's two-shot mechanic, then calls checkPhaseComplete.
- *
- * @param {{ type: string, subtype?: string, speed?: string, ammo?: number,
- *           healAmount?: number, defense?: number, durability?: number,
- *           dualWieldPairId?: string, range?: number }} card
+ * Simple bot action. ai-bot.js will override this with full heuristics.
+ * @param {number} idx
+ * @param {boolean} locked
  */
-function playerPlayCard(card) {
-  const isPairedCard = G.playerChar.attribute === 'dual_wield' && card.dualWieldPairId != null;
-  const thisCardFired = isPairedCard && G.dualWieldFiredIds.has(card.id);
-  if (thisCardFired) { logMsg('system', 'That pistol already fired this phase.'); return; }
-  if (!isPairedCard && G.playerActedThisPhase) { logMsg('system', 'You already acted this phase.'); return; }
-  if (G.gameOver) return;
-  if (G.awaitingScrapChoice) { logMsg('system', 'You must choose a card to scrap first.'); return; }
-
-  const phase = PHASES[G.phase];
-
-  // ── Weapon ─────────────────────────────────────────────────────────────────
-  if (card.type === 'weapon') {
-    const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
-    let allowedPhase = card.speed;
-    if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
-      const idx = PHASE_ORDER.indexOf(card.speed);
-      if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
-    }
-    if (phase !== allowedPhase && phase !== card.speed) {
-      logMsg('system', `${card.name} is a ${card.speed} weapon — can only play in the ${card.speed} phase (or ${allowedPhase} with Deadeye).`); return;
-    }
-    // Subtype restrictions
-    if (G.playerChar.attribute === 'dual_wield' && card.subtype !== 'pistol' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire pistols or revolvers — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'deadeye' && card.subtype !== 'revolver' && card.subtype !== 'pistol') { logMsg('system', `${G.playerChar.name} uses revolvers & pistols only — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'pistol_specialist' && card.subtype !== 'pistol') { logMsg('system', `${G.playerChar.name} can only fire pistols — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'revolver_specialist' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire revolvers — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'swift_melee' && card.subtype !== 'melee') { logMsg('system', `${G.playerChar.name} can only use melee weapons — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'rifle_specialist' && card.subtype !== 'assault_rifle' && card.subtype !== 'sniper') { logMsg('system', `${G.playerChar.name} uses rifles only — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'run_and_gun' && !G.playerMovedThisPhase) { logMsg('system', `${G.playerChar.name} must move before attacking — Run AND Gun!`); return; }
-
-    const dist = getDistance(G.playerPos, G.botPos);
-    if (card.subtype === 'melee' && dist !== 0) { logMsg('system', `${card.name} is melee — move adjacent (range 0) to use it.`); return; }
-    if (card.subtype !== 'melee' && dist > card.range) { logMsg('system', `${card.name} has max range ${card.range} — you are ${dist} space(s) away.`); return; }
-
-    // Move weapon from hand to inPlay if needed
-    if (G.playerHand.find(c => c.id === card.id)) {
-      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
-      G.playerInPlay.push(card);
-    }
-
-    let dmg = card.damage;
-    dmg = applyRangeMultiplier(dmg, card, dist);
-    dmg = applyPlayerWeaponBuff(dmg, card);
-    dmg = applyLocationDamageBuff(dmg, G.playerChar, G.playerPos, card);
-    const result = applyBotArmor(dmg, card);
-
-    // Agent Ace (as bot): 50% dodge vs non-explosive, non-melee
-    const aceCanDodge = G.botChar.attribute === 'dodge_bullets'
-      && card.subtype !== 'explosive' && card.subtype !== 'missile' && card.subtype !== 'melee';
-    if (aceCanDodge && Math.random() < 0.50) {
-      logMsg('bot', `♠️ Agent Ace dodges ${card.name}!`);
-    } else {
-      G.botChar.hp = Math.max(0, G.botChar.hp - result.finalDmg);
-      G.playerDmgDealt += result.finalDmg;
-      const rangePct = card.subtype === 'melee'
-        ? '(melee)'
-        : `(${dist}/${card.range} rng — ${Math.round(dist / card.range * 100)}% dmg)`;
-      logMsg('player', `You fire ${card.name} → ${result.finalDmg} dmg ${rangePct}${result.armorNote}.`);
-    }
-
-    card.ammo--;
-    if (card.ammo <= 0) {
-      G.playerInPlay = G.playerInPlay.filter(c => c.id !== card.id);
-      logMsg('system', `${card.name} is out of ammo and discarded.`);
-    }
-
-    // Dual Wield: track first shot; return early if partner card still unfired
-    if (isPairedCard) {
-      G.dualWieldFiredIds.add(card.id);
-      const allPaired = [...G.playerHand, ...G.playerInPlay]
-        .filter(c => c.dualWieldPairId === card.dualWieldPairId && c.id !== card.id);
-      const partnerUnfired = allPaired.some(c => !G.dualWieldFiredIds.has(c.id));
-      if (partnerUnfired) {
-        G.selectedCard = null;
-        logMsg('player', `🔫 Dual Wield! Fire your second pistol!`);
-        checkWin();
-        if (!G.gameOver) render();
-        return;
-      }
-    }
-
-    G.playerActedThisPhase = true;
-    G.selectedCard = null;
-    checkWin();
-    if (!G.gameOver) checkPhaseComplete();
-    render();
-
-    // ── Defense / Heal ──────────────────────────────────────────────────────────
-  } else if (card.type === 'defense') {
-    if (G.playerChar.attribute === 'extra_carry') { logMsg('system', `Tracy Guns carries only weapons — defense cards are locked.`); return; }
-    if (G.playerChar.attribute === 'dual_wield') { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
-
-    if (card.healAmount > 0) {
-      // Healing item
-      if (G.playerChar.hp >= G.playerChar.maxHp) { logMsg('system', `You are already at full health — ${card.name} cannot be used.`); return; }
-      const healAmt = G.playerChar.attribute === 'healing'
-        ? Math.ceil(card.healAmount * 1.4)
-        : card.healAmount;
-      if (G.playerChar.hp + healAmt > G.playerChar.maxHp) {
-        logMsg('system', `${card.name} would overheal — you need at least ${G.playerChar.maxHp - G.playerChar.hp} missing HP, and this heals ${healAmt}.`); return;
-      }
-      healPlayer(healAmt);
-      G.playerHealTotal += healAmt;
-      const boostedNote = G.playerChar.attribute === 'healing'
-        ? ` (healing boost: ${healAmt} vs base ${card.healAmount})` : '';
-      logMsg('heal', `You use ${card.name} → +${healAmt} HP${boostedNote}.`);
-      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
-      G.playerInPlay = G.playerInPlay.filter(c => c.id !== card.id);
-    } else {
-      // Armor equip
-      if (G.playerInPlay.find(c => c.id === card.id)) { logMsg('system', `${card.name} is already equipped.`); return; }
-      const equippedDefense = G.playerInPlay.filter(c => c.type === 'defense' && c.healAmount === 0).length;
-      if (equippedDefense >= 2) { logMsg('system', `You can only have 2 defensive items equipped at a time. Unequip one first.`); return; }
-      G.playerHand = G.playerHand.filter(c => c.id !== card.id);
-      G.playerInPlay.push(card);
-      logMsg('player', `You equip ${card.name} (${card.defense} def, ${card.durability} dur).`);
-    }
-
-    G.playerActedThisPhase = true;
-    G.selectedCard = null;
-    checkPhaseComplete();
-    render();
+function _botAct(idx, locked) {
+  if (locked) { logMsg('bot', `${G.botSquad[idx].name} is energy-locked.`); return; }
+  const b = G.botSquad[idx];
+  if (!b.weapon || G.botEnergy < b.weapon.energyCost) {
+    logMsg('bot', `${b.name} holds position.`);
+    return;
   }
+  // Find a valid target (first non-KO'd player Blaster)
+  const targetIdx = G.playerSquad.findIndex(p => !p.ko);
+  if (targetIdx === -1) return;
+  const target = G.playerSquad[targetIdx];
+  const dist   = getDistance(G.botPositions[idx], G.playerPositions[targetIdx]);
+  if (dist > b.weapon.range) { logMsg('bot', `${b.name} is out of range — holds position.`); return; }
+  if (!spendEnergy('bot', b.weapon.energyCost)) return;
+  // Basic damage: weapon.damage × (strength / 5) — tuned in combat.js later
+  const dmg = Math.round(b.weapon.damage * (b.strength / 5));
+  target.hp  = Math.max(0, target.hp - dmg);
+  if (target.hp <= 0) target.ko = true;
+  G.botDmgDealt += dmg;
+  logMsg('bot', `${b.name} fires ${b.weapon.name} → ${dmg} dmg to ${target.name}.`);
 }
 
-/**
- * Plays whichever card is currently selected (G.selectedCard).
- * Called by the FIRE / EQUIP / USE button overlay.
- */
-function playerPlaySelectedCard() {
-  if (!G.selectedCard) return;
-  const card = G.playerHand.find(c => c.id === G.selectedCard)
-    || G.playerInPlay.find(c => c.id === G.selectedCard);
-  if (!card) { logMsg('system', 'Card not found.'); return; }
-  playerPlayCard(card);
+// ── Win condition ─────────────────────────────────────────────────────────────
+
+function checkWin() {
+  if (G.gameOver) return;
+  const pAlive = G.playerSquad.some(b => !b.ko);
+  const bAlive = G.botSquad.some(b => !b.ko);
+  if (!pAlive) { endGame('bot');    return; }
+  if (!bAlive) { endGame('player'); return; }
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
+// ── End game ──────────────────────────────────────────────────────────────────
 
-/** Toggles the battle-log panel open/closed. */
-function toggleLog() {
-  const log = document.getElementById('log');
-  const arrow = document.getElementById('log-toggle-arrow');
-  if (!log) return;
-  const collapsed = log.classList.toggle('collapsed');
-  if (arrow) arrow.textContent = collapsed ? '▶' : '▼';
+function endGame(winner) {
+  G.gameOver = true;
+  saveEndurance();
+  clearActionTimer();
+
+  const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
+  const mins    = Math.floor(elapsed / 60);
+  const secs    = elapsed % 60;
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  const titles  = { player: '🏆 VICTORY!', bot: '💀 DEFEATED', draw: '🤝 DRAW' };
+  const msgs    = {
+    player: `You defeated the enemy squad in ${timeStr}!`,
+    bot:    `Your squad was eliminated in ${timeStr}.`,
+    draw:   `Both squads fought to a standstill — ${timeStr}.`,
+  };
+
+  document.getElementById('modal-title').textContent = titles[winner] || '—';
+  document.getElementById('modal-msg').textContent   = msgs[winner]   || '';
+  document.getElementById('modal-overlay')?.classList.remove('hidden');
+  logMsg('system', `=== ${titles[winner]} === ${msgs[winner]}`);
 }
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
-/**
- * Appends a message to the in-game log panel and the slim log bar.
- *
- * @param {'system'|'player'|'bot'|'phase'|'damage'|'heal'} type
- * @param {string} text
- */
 function logMsg(type, text) {
   if (!G.log) G.log = [];
   G.log.push({ type, text });
-
   const el = document.getElementById('log');
   if (!el) return;
-  const div = document.createElement('div');
+  const div     = document.createElement('div');
   div.className = `log-entry log-${type} new-entry`;
   div.textContent = text;
-
-  const slim = document.getElementById('slim-log');
-  if (slim) slim.textContent = text;
-
   el.appendChild(div);
   el.scrollTop = el.scrollHeight;
+  const slim = document.getElementById('slim-log');
+  if (slim) slim.textContent = text;
 }
