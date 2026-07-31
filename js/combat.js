@@ -1,538 +1,786 @@
 /**
- * combat.js — Blast Battles revamp combat resolution
- * Dependencies: data.js, utils.js, grid.js, game-state.js
- * Reads/writes the global G object.
- * Calls: logMsg(), endGame(), render() (render.js)
+ * combat.js — Blast Battles combat resolution & game-state helpers
+ * Dependencies (must load first): data.js, utils.js, grid.js
+ * Reads/writes the global `G` object (game state).
+ * Calls: logMsg() (game-state.js), render() (render.js), clearPhaseTimer() (game-state.js)
  *
  * Exports (browser globals):
- *   calcDamage(attacker, weapon, dist)           → number
- *   applyArmor(target, rawDmg, weaponSubtype)    → { finalDmg, armorNote }
- *   applyLocationBuff(dmg, blaster, tileIdx, weapon?) → number
- *   healBlaster(blaster, amount)                 → number  (actual healed)
- *   applyLocationEffects(side, blasterIdx)
- *   fireWeapon(side, atkIdx, tgtIdx)             → boolean
- *   useConsumable(side, consumableId, targetIdx) → boolean
- *   useAbility(side, blasterIdx)                 → boolean
+ *   applyRangeMultiplier(baseDmg, card, dist)          → number
+ *   applyPlayerWeaponBuff(dmg, card)                   → number
+ *   applyBotWeaponBuff(dmg, card)                      → number
+ *   applyLocationDamageBuff(dmg, char, pos, card?)     → number
+ *   applyBotArmor(dmg, attackingCard)                  → { finalDmg, armorNote }
+ *   applyPlayerArmor(dmg, attackingCard)               → { finalDmg, armorNote }
+ *   getEffectiveSpeed(char, hand, inPlay)              → number
+ *   getMaxHandSize(char)                               → number
+ *   playerTotalCards()                                 → number
+ *   botTotalCards()                                    → number
+ *   healPlayer(amount)
+ *   healBot(amount)
+ *   applyLocationEffects(isCardDrawPhase?)
+ *   playerScrapCard(cardId)
+ *   isCardPlayable(card)                               → boolean
+ *   checkWin()
+ *   endGame(winner, timeLimit?)
  *   retreat()
- *   buildEndModalHTML(winner, elapsed)           → string
+ *   buildModalStatsHTML(opts)                          → string (HTML)
+ *   glowClassPlayer(playerVal, botVal)                 → boolean
+ *   glowClassBot(playerVal, botVal)                    → boolean
+ *   MAX_TURNS                                          → 20
+ *   MAX_MATCH_TIME_SEC                                 → 1600
  */
 
 'use strict';
 
-// ── Damage calculation ────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_TURNS = 20;
+const MAX_MATCH_TIME_SEC = 1600; // 20 turns × 4 phases × 20s
+
+// ── Range & damage multipliers ───────────────────────────────────────────────
 
 /**
- * Calculates raw damage before armor.
+ * Scales base damage by how far the shooter is from their maximum range.
+ * Melee always deals full damage at contact (range 0 — no scaling).
+ * All other weapons scale linearly: full damage at max range, less when closer.
+ * This rewards positioning and makes snipers devastating at max range.
  *
- * Formula: weapon.damage × (attacker.strength / 5) × rangeMultiplier
- *
- * Range multiplier:
- *   melee        → full damage only at dist 0
- *   ranged       → scales linearly: full at max range, 50% minimum at point blank
- *                  (prevents range 0 shots with a sniper dealing 0 damage)
- *
- * Strength scale (strength / 5):
- *   strength 5  → 1.0× (baseline)
- *   strength 10 → 2.0× (glass cannon)
- *   strength 1  → 0.2× (support)
- *
- * @param {{ strength: number }} attacker
- * @param {{ damage: number, subtype: string, range: number }} weapon
- * @param {number} dist — Chebyshev distance to target
+ * @param {number} baseDmg
+ * @param {{ subtype: string, range: number }} card
+ * @param {number} dist - Chebyshev distance to target
  * @returns {number}
  */
-function calcDamage(attacker, weapon, dist) {
-  const strMult  = attacker.strength / 5;
-  let rangeMult  = 1;
-
-  if (weapon.subtype === 'melee') {
-    rangeMult = dist === 0 ? 1 : 0; // melee: must be adjacent
-  } else if (weapon.range > 0) {
-    // Linear scale: 0.5 at dist 0, 1.0 at max range
-    const raw = dist / weapon.range;
-    rangeMult  = Math.max(0.5, Math.min(1.0, raw));
-  }
-
-  return Math.round(weapon.damage * strMult * rangeMult);
+function applyRangeMultiplier(baseDmg, card, dist) {
+  if (card.subtype === 'melee') return baseDmg; // melee: full damage at range 0
+  if (card.range === 0) return baseDmg;          // safety guard — no divide-by-zero
+  return Math.round(baseDmg * (dist / card.range));
 }
 
-// ── Armor resolution ──────────────────────────────────────────────────────────
-
 /**
- * Resolves raw damage against a target Blaster's equipped armor array.
- * Effective armor (weaponSubtype in effectiveVs) reduces by full defense value.
- * Ineffective armor reduces by 40%.
- * Each hit costs 1 durability; armor at 0 is removed from target.armor[].
- *
- * Gadget: damage_reduction passive reduces all incoming damage by 10% first.
- *
- * @param {{ armor: object[], gadget: object|null, name: string }} target
- * @param {number} rawDmg
- * @param {string} weaponSubtype
- * @returns {{ finalDmg: number, armorNote: string }}
- */
-function applyArmor(target, rawDmg, weaponSubtype) {
-  let dmg      = rawDmg;
-  let note     = '';
-
-  // Passive gadget: Armor Weave — 10% global reduction
-  if (target.gadget && target.gadget.effect === 'damage_reduction') {
-    dmg  = Math.round(dmg * 0.9);
-    note += ' [Armor Weave -10%]';
-  }
-
-  // Equipped armor pieces
-  const activeArmor = (target.armor || []).filter(a => a.durability > 0 && a.healAmount === 0);
-  for (const piece of activeArmor) {
-    const effective  = piece.effectiveVs.includes(weaponSubtype);
-    const reduction  = effective
-      ? piece.defense
-      : Math.ceil(piece.defense * 0.4);
-    const blocked    = Math.min(dmg, reduction);
-    dmg             -= blocked;
-    piece.durability--;
-    note            += ` (${piece.name} blocked ${blocked}${piece.durability <= 0 ? ' [BROKEN]' : ''})`;
-    if (piece.durability <= 0) {
-      target.armor = target.armor.filter(a => a.id !== piece.id);
-    }
-  }
-
-  return { finalDmg: Math.max(0, dmg), armorNote: note };
-}
-
-// ── Location buff ─────────────────────────────────────────────────────────────
-
-/**
- * Applies tile-based damage buffs to an attacker.
- * hero_zone:    +25% for hero-aligned Blasters
- * villain_zone: +25% for villain-aligned Blasters
- * sniper_nest:  +33% for sniper weapons
+ * Applies the player character's weapon specialisation bonus.
+ * dual_wield gets no per-shot bonus — the power is the double-attack.
  *
  * @param {number} dmg
- * @param {{ alignment: string }} blaster
- * @param {number} tileIdx
- * @param {{ subtype: string }|null} [weapon]
+ * @param {{ subtype: string }} card
  * @returns {number}
  */
-function applyLocationBuff(dmg, blaster, tileIdx, weapon = null) {
-  const loc = G.locations[tileIdx];
-  if (!loc) return dmg;
-  if (loc.effect === 'hero_zone'    && blaster.alignment === 'hero')                      return Math.ceil(dmg * 1.25);
-  if (loc.effect === 'villain_zone' && blaster.alignment === 'villain')                   return Math.ceil(dmg * 1.25);
-  if (loc.effect === 'sniper_nest'  && weapon && weapon.subtype === 'sniper')             return Math.ceil(dmg * 1.33);
+function applyPlayerWeaponBuff(dmg, card) {
+  const attr = G.playerChar.attribute;
+  const sub  = card.subtype;
+  if (attr === 'dual_wield'          && (sub === 'pistol' || sub === 'revolver'))            return dmg; // bonus is the second shot
+  if (attr === 'deadeye'             && sub === 'revolver')                                  return Math.ceil(dmg * 1.25);
+  if (attr === 'pistol_specialist'   && sub === 'pistol')                                    return Math.ceil(dmg * 1.3);
+  if (attr === 'shotgun_specialist'  && sub === 'shotgun')                                   return Math.ceil(dmg * 1.3);
+  if (attr === 'rifle_specialist'    && (sub === 'assault_rifle' || sub === 'sniper'))       return Math.ceil(dmg * 1.25);
+  if (attr === 'sniper_specialist'   && sub === 'sniper')                                    return Math.ceil(dmg * 1.33);
+  if (attr === 'explosive_specialist'&& (sub === 'explosive' || sub === 'missile'))          return Math.ceil(dmg * 1.35);
+  if (attr === 'melee_specialist'    && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
+  if (attr === 'swift_melee'         && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
   return dmg;
 }
 
-// ── Healing ───────────────────────────────────────────────────────────────────
-
 /**
- * Heals a Blaster, capped at maxHp.
- * Returns the actual amount healed (may be less than requested if near full).
+ * Applies the bot character's weapon specialisation bonus.
+ * Mirrors applyPlayerWeaponBuff but reads G.botChar.
+ * Note: sniper_specialist bot gets 1.35× (vs 1.33× for player) — intentional difficulty edge.
  *
- * @param {{ hp: number, maxHp: number }} blaster
- * @param {number} amount
+ * @param {number} dmg
+ * @param {{ subtype: string }} card
  * @returns {number}
  */
-function healBlaster(blaster, amount) {
-  const before  = blaster.hp;
-  blaster.hp    = Math.min(blaster.maxHp, blaster.hp + amount);
-  return blaster.hp - before;
+function applyBotWeaponBuff(dmg, card) {
+  const attr = G.botChar.attribute;
+  const sub  = card.subtype;
+  if (attr === 'dual_wield'          && (sub === 'pistol' || sub === 'revolver'))            return dmg;
+  if (attr === 'deadeye'             && sub === 'revolver')                                  return Math.ceil(dmg * 1.25);
+  if (attr === 'pistol_specialist'   && sub === 'pistol')                                    return Math.ceil(dmg * 1.3);
+  if (attr === 'shotgun_specialist'  && sub === 'shotgun')                                   return Math.ceil(dmg * 1.3);
+  if (attr === 'rifle_specialist'    && (sub === 'assault_rifle' || sub === 'sniper'))       return Math.ceil(dmg * 1.25);
+  if (attr === 'sniper_specialist'   && sub === 'sniper')                                    return Math.ceil(dmg * 1.35);
+  if (attr === 'explosive_specialist'&& (sub === 'explosive' || sub === 'missile'))          return Math.ceil(dmg * 1.35);
+  if (attr === 'melee_specialist'    && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
+  if (attr === 'swift_melee'         && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
+  return dmg;
 }
 
-// ── Location tile effects ─────────────────────────────────────────────────────
+/**
+ * Applies a location-based damage buff to the attacker.
+ * Hero Zone: +25% for heroes; Villain Zone: +25% for villains.
+ * Sniper Nest / Watch Tower: +33% for sniper weapons.
+ *
+ * @param {number} dmg
+ * @param {{ faction: string }} char  - Attacking character
+ * @param {number} pos                - Attacker's tile index
+ * @param {{ subtype: string }|null} [card]
+ * @returns {number}
+ */
+function applyLocationDamageBuff(dmg, char, pos, card = null) {
+  const loc = G.locations[pos];
+  if (!loc) return dmg;
+  if (loc.effect === 'hero_zone'    && char.faction === 'hero')                        return Math.ceil(dmg * 1.25);
+  if (loc.effect === 'villain_zone' && char.faction === 'villain')                     return Math.ceil(dmg * 1.25);
+  if (loc.effect === 'sniper_nest'  && card && card.subtype === 'sniper')              return Math.ceil(dmg * 1.33);
+  return dmg;
+}
+
+// ── Armor resolution ─────────────────────────────────────────────────────────
 
 /**
- * Applies the current tile's passive effect to one Blaster.
- * Called at the start of each Blaster's turn.
+ * Resolves incoming damage against the bot's equipped armor.
+ * Effective armor reduces by full `defense` value; ineffective by 40%.
+ * Heavy armor (Iron Titan) boosts Riot Shield / Riot Vest by 25%.
+ * Armor durability decreases each hit; broken armor is removed from inPlay.
+ * Mutates G.botChar.hp indirectly via G.botInPlay armor durability.
  *
- * radiation / poison → -5 HP
- * heal              → +3 HP (tracked in G.playerHealTotal / G.botHealTotal)
- * draw_weapon       → grants a random weapon from WEAPON_POOL (if slot free)
- * draw_armor        → grants a random armor from ARMOR_POOL (if slot free)
- *
- * @param {'player'|'bot'} side
- * @param {number} blasterIdx
+ * @param {number} dmg
+ * @param {{ subtype: string }} attackingCard
+ * @returns {{ finalDmg: number, armorNote: string }}
  */
-function applyLocationEffects(side, blasterIdx) {
-  const squad    = side === 'player' ? G.playerSquad    : G.botSquad;
-  const positions= side === 'player' ? G.playerPositions: G.botPositions;
-  const b        = squad[blasterIdx];
-  const loc      = G.locations[positions[blasterIdx]];
-  if (!b || !loc || b.ko) return;
-
-  if (loc.effect === 'radiation' || loc.effect === 'poison') {
-    b.hp = Math.max(0, b.hp - 5);
-    logMsg('damage', `${loc.name} deals 5 damage to ${b.name}.`);
-    if (b.hp <= 0) { b.ko = true; logMsg('damage', `${b.name} is KO'd by the environment!`); }
+function applyBotArmor(dmg, attackingCard) {
+  let finalDmg = dmg;
+  let armorNote = '';
+  for (const armor of G.botInPlay.filter(c => c.type === 'defense' && c.healAmount === 0)) {
+    const isEffective = armor.effectiveVs.includes(attackingCard.subtype);
+    let reduction = isEffective ? armor.defense : Math.ceil(armor.defense * 0.4);
+    if (G.botChar.attribute === 'heavy_armor' && (armor.name === 'Riot Shield' || armor.name === 'Riot Vest'))
+      reduction = Math.ceil(reduction * 1.25);
+    if (G.botChar.attribute === 'sniper_resist' && attackingCard.subtype === 'sniper')
+      reduction = Math.ceil(dmg * 0.5);
+    if (G.botChar.attribute === 'run_and_gun' && (attackingCard.subtype === 'explosive' || attackingCard.subtype === 'missile'))
+      reduction = Math.ceil(dmg * 0.4);
+    const actualReduction = Math.min(finalDmg, reduction);
+    finalDmg -= actualReduction;
+    if (actualReduction > 0) {
+      const durabLost = isEffective ? 1 : (dmg > 50 ? 2 : 1);
+      armor.durability -= durabLost;
+      armorNote += ` (${armor.name} blocked ${actualReduction})`;
+      if (armor.durability <= 0) {
+        G.botInPlay = G.botInPlay.filter(c => c.id !== armor.id);
+        armorNote += ' [BROKEN]';
+      }
+    }
   }
+  return { finalDmg: Math.max(0, finalDmg), armorNote };
+}
 
-  if (loc.effect === 'heal') {
-    const restored = healBlaster(b, 3);
-    if (restored > 0) {
-      logMsg('heal', `${loc.name} restores ${restored} HP to ${b.name}.`);
-      if (side === 'player') G.playerHealTotal += restored;
-      else                   G.botHealTotal    += restored;
+/**
+ * Resolves incoming damage against the player's equipped armor.
+ * Mirrors applyBotArmor but reads G.playerChar / G.playerInPlay.
+ *
+ * @param {number} dmg
+ * @param {{ subtype: string }} attackingCard
+ * @returns {{ finalDmg: number, armorNote: string }}
+ */
+function applyPlayerArmor(dmg, attackingCard) {
+  let finalDmg = dmg;
+  let armorNote = '';
+  for (const armor of G.playerInPlay.filter(c => c.type === 'defense' && c.healAmount === 0)) {
+    const isEffective = armor.effectiveVs.includes(attackingCard.subtype);
+    let reduction = isEffective ? armor.defense : Math.ceil(armor.defense * 0.4);
+    if (G.playerChar.attribute === 'heavy_armor' && (armor.name === 'Riot Shield' || armor.name === 'Riot Vest'))
+      reduction = Math.ceil(reduction * 1.25);
+    if (G.playerChar.attribute === 'sniper_resist' && attackingCard.subtype === 'sniper')
+      reduction = Math.ceil(dmg * 0.5);
+    if (G.playerChar.attribute === 'run_and_gun' && (attackingCard.subtype === 'explosive' || attackingCard.subtype === 'missile'))
+      reduction = Math.ceil(dmg * 0.4);
+    const actualReduction = Math.min(finalDmg, reduction);
+    finalDmg -= actualReduction;
+    if (actualReduction > 0) {
+      const durabLost = isEffective ? 1 : (dmg > 50 ? 2 : 1);
+      armor.durability -= durabLost;
+      armorNote += ` (${armor.name} blocked ${actualReduction})`;
+      if (armor.durability <= 0) {
+        G.playerInPlay = G.playerInPlay.filter(c => c.id !== armor.id);
+        armorNote += ' [BROKEN]';
+      }
+    }
+  }
+  return { finalDmg: Math.max(0, finalDmg), armorNote };
+}
+
+// ── Character stat helpers ───────────────────────────────────────────────────
+
+/**
+ * Returns the effective speed of a character, accounting for Tactical Tim's
+ * passive: speed decreases by 1 for each card held (hand + in-play).
+ *
+ * @param {{ attribute: string, speed: number }} char
+ * @param {any[]} hand
+ * @param {any[]} inPlay
+ * @returns {number}
+ */
+function getEffectiveSpeed(char, hand, inPlay) {
+  if (char.attribute === 'tactical_xray') {
+    const cardsEquipped = (hand ? hand.length : 0) + (inPlay ? inPlay.length : 0);
+    return Math.max(0, char.speed - cardsEquipped);
+  }
+  return char.speed;
+}
+
+/**
+ * Returns the maximum number of cards (hand + in-play combined) a character
+ * may hold.
+ * extra_carry (Tracy Guns): 5  — she holds 5 weapons, no defense.
+ * dual_wield  (Pistol Pete): 4 — 2 pistols + 2 draw slots.
+ * tactical_xray (Tim): 4       — every extra card costs 1 SPD.
+ * everyone else: 4.
+ *
+ * @param {{ attribute: string }} char
+ * @returns {number}
+ */
+function getMaxHandSize(char) {
+  if (char.attribute === 'extra_carry')   return 5;
+  if (char.attribute === 'dual_wield')    return 4;
+  if (char.attribute === 'tactical_xray') return 4;
+  return 4;
+}
+
+/** Total cards (hand + in-play) currently held by the player. */
+function playerTotalCards() {
+  return G.playerHand.length + G.playerInPlay.length;
+}
+
+/** Total cards (hand + in-play) currently held by the bot. */
+function botTotalCards() {
+  return G.botHand.length + G.botInPlay.length;
+}
+
+// ── Healing ──────────────────────────────────────────────────────────────────
+
+/** Heals the player, capped at maxHp. */
+function healPlayer(amount) {
+  G.playerChar.hp = Math.min(G.playerChar.maxHp, G.playerChar.hp + amount);
+}
+
+/** Heals the bot, capped at maxHp. */
+function healBot(amount) {
+  G.botChar.hp = Math.min(G.botChar.maxHp, G.botChar.hp + amount);
+}
+
+// ── Location effects ─────────────────────────────────────────────────────────
+
+/**
+ * Applies all tile effects for the current phase to both player and bot.
+ * Called at the start of every phase (except Turn 1 / Phase 0).
+ *
+ * Damage / heal effects fire every phase.
+ * Card-draw effects (Armory, Forge) fire only on card-draw phases (medium/charged).
+ * Scrap Heap prompts the player to discard; the bot makes an automatic decision.
+ *
+ * Toxic Trooper (radioactive_resist) special rules:
+ *   - Immune to radiation tiles (0 damage).
+ *   - Heal tiles deal 3 damage instead.
+ *   - All other (non-radiation, non-heal) tiles deal 1 damage per phase.
+ *
+ * @param {boolean} [isCardDrawPhase=true]
+ */
+function applyLocationEffects(isCardDrawPhase = true) {
+  // ── Player tile ────────────────────────────────────────────────────────────
+  const pLoc = G.locations[G.playerPos];
+
+  if (pLoc.effect === 'radiation') {
+    const dmg = G.playerChar.attribute === 'radioactive_resist' ? 0 : 5;
+    if (dmg > 0) {
+      G.playerChar.hp = Math.max(0, G.playerChar.hp - dmg);
+      logMsg('damage', `${pLoc.name} deals ${dmg} damage to you.`);
+    } else {
+      logMsg('system', `☢️ ${G.playerChar.name} is immune to radiation — no damage!`);
     }
   }
 
-  if (loc.effect === 'draw_weapon' && (b.armor || []).length < 4) {
-    const weapon = deepClone(rand(WEAPON_POOL));
-    if (!b.weapon) {
-      b.weapon = weapon;
-      logMsg(side, `${b.name} picks up ${weapon.name} from ${loc.name}!`);
+  if (pLoc.effect === 'heal') {
+    if (G.playerChar.attribute === 'radioactive_resist') {
+      G.playerChar.hp = Math.max(0, G.playerChar.hp - 3);
+      logMsg('damage', `☠️ ${pLoc.name} is toxic to ${G.playerChar.name} — deals 3 damage!`);
+    } else {
+      const pMissing = G.playerChar.maxHp - G.playerChar.hp;
+      if (pMissing > 0) {
+        const base = Math.min(3, pMissing);
+        const pRestored = G.playerChar.attribute === 'healing'
+          ? Math.min(Math.ceil(base * 1.4), pMissing)
+          : base;
+        healPlayer(pRestored);
+        G.playerHealTotal += pRestored;
+        logMsg('heal', `${pLoc.name} restores ${pRestored} HP to you.`);
+      }
     }
   }
 
-  if (loc.effect === 'draw_armor' && (b.armor || []).length < 4) {
-    const piece = deepClone(rand(ARMOR_POOL.filter(a => a.healAmount === 0)));
-    b.armor = b.armor || [];
-    b.armor.push(piece);
-    logMsg(side, `${b.name} equips ${piece.name} from ${loc.name}!`);
+  // Toxic Trooper off-hazard penalty
+  if (G.playerChar.attribute === 'radioactive_resist'
+    && pLoc.effect !== 'radiation' && pLoc.effect !== 'heal' && pLoc.effect !== 'poison') {
+    G.playerChar.hp = Math.max(0, G.playerChar.hp - 1);
+    logMsg('damage', `☠️ ${G.playerChar.name} is off a hazard tile — takes 1 toxic dmg!`);
+  }
+
+  // Scrap Heap — prompts player choice (resolved via playerScrapCard)
+  if (pLoc.effect === 'discard') {
+    const allPlayerCards = [...G.playerHand, ...G.playerInPlay];
+    if (allPlayerCards.length > 0) {
+      G.awaitingScrapChoice = true;
+      logMsg('system', 'Scrap Heap: optionally click a card to discard it, or END TURN to keep all cards.');
+    }
+  }
+
+  // Card draws — card-draw phases only
+  if (isCardDrawPhase) {
+    if (pLoc.effect === 'draw_weapon') {
+      const maxTotal = getMaxHandSize(G.playerChar);
+      if (playerTotalCards() < maxTotal && G.weaponDeck.length > 0) {
+        const c = G.weaponDeck.shift();
+        G.playerHand.push(c);
+        logMsg('player', `Armory grants you ${c.name}!`);
+        // Pistol Pete: auto-clone any pistol or revolver drawn into a paired dual-wield copy
+        if (G.playerChar.attribute === 'dual_wield'
+          && (c.subtype === 'pistol' || c.subtype === 'revolver')
+          && playerTotalCards() < maxTotal) {
+          const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
+          c.dualWieldPairId = pairId;
+          const clone = deepClone(c);
+          clone.id = c.id + '_clone_' + Math.random().toString(36).slice(2, 7);
+          clone.dualWieldPairId = pairId;
+          G.playerHand.push(clone);
+          logMsg('player', `🔫 Dual Wield: cloned ${c.name} for paired firing!`);
+        }
+      } else if (playerTotalCards() >= maxTotal) {
+        logMsg('system', 'Your cards are full — Armory card forfeited.');
+      }
+    }
+    if (pLoc.effect === 'draw_defense') {
+      const maxTotal = getMaxHandSize(G.playerChar);
+      if (playerTotalCards() < maxTotal && G.defenseDeck.length > 0) {
+        const c = G.defenseDeck.shift();
+        G.playerHand.push(c);
+        logMsg('player', `Forge grants you ${c.name}!`);
+      } else if (playerTotalCards() >= maxTotal) {
+        logMsg('system', 'Your cards are full — Forge card forfeited.');
+      }
+    }
+  }
+
+  // ── Bot tile ───────────────────────────────────────────────────────────────
+  const bLoc = G.locations[G.botPos];
+
+  if (bLoc.effect === 'radiation' || bLoc.effect === 'poison') {
+    const dmg = (bLoc.effect === 'radiation' && G.botChar.attribute === 'radioactive_resist') ? 0 : 5;
+    if (dmg > 0) {
+      G.botChar.hp = Math.max(0, G.botChar.hp - dmg);
+      logMsg('damage', `${bLoc.name} deals ${dmg} damage to bot.`);
+    } else {
+      logMsg('system', `☢️ ${G.botChar.name} is immune to radiation — no damage!`);
+    }
+  }
+
+  if (bLoc.effect === 'heal') {
+    if (G.botChar.attribute === 'radioactive_resist') {
+      G.botChar.hp = Math.max(0, G.botChar.hp - 3);
+      logMsg('damage', `☠️ ${bLoc.name} is toxic to ${G.botChar.name} — deals 3 damage!`);
+    } else {
+      const bMissing = G.botChar.maxHp - G.botChar.hp;
+      if (bMissing > 0) {
+        const base = Math.min(3, bMissing);
+        const bRestored = G.botChar.attribute === 'healing'
+          ? Math.min(Math.ceil(base * 1.4), bMissing)
+          : base;
+        healBot(bRestored);
+        G.botHealTotal += bRestored;
+        logMsg('heal', `${bLoc.name} restores ${bRestored} HP to bot.`);
+      }
+    }
+  }
+
+  // Toxic Trooper off-hazard penalty (bot)
+  if (G.botChar.attribute === 'radioactive_resist'
+    && bLoc.effect !== 'radiation' && bLoc.effect !== 'heal' && bLoc.effect !== 'poison') {
+    G.botChar.hp = Math.max(0, G.botChar.hp - 1);
+    logMsg('damage', `☠️ ${G.botChar.name} is off a hazard tile — takes 1 toxic dmg!`);
+  }
+
+  // Bot card draws — card-draw phases only
+  if (isCardDrawPhase) {
+    if (bLoc.effect === 'draw_weapon' && G.weaponDeck.length > 0 && botTotalCards() < getMaxHandSize(G.botChar)) {
+      const c = G.weaponDeck.shift();
+      G.botHand.push(c);
+      logMsg('bot', `Bot draws a weapon from Armory.`);
+    }
+    if (bLoc.effect === 'draw_defense' && G.defenseDeck.length > 0 && botTotalCards() < getMaxHandSize(G.botChar)) {
+      const c = G.defenseDeck.shift();
+      G.botHand.push(c);
+      logMsg('bot', `Bot draws a defense card from Forge.`);
+    }
+    // Scrap Heap — bot auto-scrap: dump the lowest-value card if it's truly useless
+    if (bLoc.effect === 'discard') {
+      const allBotCards = [...G.botHand, ...G.botInPlay];
+      if (allBotCards.length > 0) {
+        function scrapScore(c) {
+          const botAttr = G.botChar.attribute;
+          const isUseless =
+            (c.type === 'weapon'  && c.ammo <= 0) ||
+            (c.type === 'defense' && c.durability <= 0) ||
+            ((botAttr === 'pistol_specialist' || botAttr === 'dual_wield')   && c.type === 'weapon' && c.subtype !== 'pistol'        && c.subtype !== 'revolver') ||
+            ((botAttr === 'revolver_specialist' || botAttr === 'deadeye')    && c.type === 'weapon' && c.subtype !== 'revolver'      && c.subtype !== 'pistol')   ||
+            (botAttr === 'swift_melee'   && c.type === 'weapon' && c.subtype !== 'melee')                                                                          ||
+            (botAttr === 'rifle_specialist' && c.type === 'weapon' && c.subtype !== 'assault_rifle' && c.subtype !== 'sniper')                                     ||
+            (botAttr === 'extra_carry'   && c.type === 'defense');
+          if (isUseless)                                  return 0;
+          if (c.type === 'weapon'  && c.ammo <= 1)        return 10;
+          if (c.type === 'weapon')                         return 20 + c.damage;
+          if (c.type === 'defense' && c.healAmount > 0)   return 50;
+          if (c.type === 'defense')                        return 30 + (c.defense || 0);
+          return 15;
+        }
+        const worstCard = allBotCards.reduce((a, b) => scrapScore(a) <= scrapScore(b) ? a : b);
+        if (scrapScore(worstCard) < 15) {
+          G.botHand   = G.botHand.filter(c   => c.id !== worstCard.id);
+          G.botInPlay = G.botInPlay.filter(c => c.id !== worstCard.id);
+          logMsg('bot', `Bot scraps ${worstCard.name} at Scrap Heap — dead weight cleared.`);
+        } else {
+          logMsg('bot', `Bot passes on Scrap Heap — no useless cards to dump.`);
+        }
+      }
+    }
   }
 }
 
-// ── Fire weapon ───────────────────────────────────────────────────────────────
-
 /**
- * Executes a weapon attack from one Blaster to another.
- * Validates Energy, range, ammo (future), then resolves damage.
- * Mutates G directly (hp, ko, energy, dmgDealt totals).
+ * Called when the player clicks a card at the Scrap Heap.
+ * Removes the card from hand or inPlay and clears the awaiting flag.
  *
- * @param {'player'|'bot'} atkSide   — attacking side
- * @param {number}         atkIdx    — index in squad array
- * @param {number}         tgtIdx    — index in opposing squad array
- * @returns {boolean} true if the attack resolved
+ * @param {string} cardId
  */
-function fireWeapon(atkSide, atkIdx, tgtIdx) {
-  const atkSquad  = atkSide === 'player' ? G.playerSquad     : G.botSquad;
-  const tgtSquad  = atkSide === 'player' ? G.botSquad        : G.playerSquad;
-  const atkPos    = atkSide === 'player' ? G.playerPositions : G.botPositions;
-  const tgtPos    = atkSide === 'player' ? G.botPositions    : G.playerPositions;
-
-  const attacker  = atkSquad[atkIdx];
-  const target    = tgtSquad[tgtIdx];
-  const weapon    = attacker.weapon;
-
-  if (!attacker || attacker.ko)  { logMsg('system', 'Attacker is KO\'d.');       return false; }
-  if (!target   || target.ko)    { logMsg('system', 'Target is already KO\'d.'); return false; }
-  if (!weapon)                   { logMsg('system', `${attacker.name} has no weapon equipped.`); return false; }
-
-  // Energy check
-  if (!spendEnergy(atkSide, weapon.energyCost)) return false;
-
-  // Range check
-  const dist = getDistance(atkPos[atkIdx], tgtPos[tgtIdx]);
-  if (weapon.subtype === 'melee' && dist !== 0) {
-    logMsg('system', `${weapon.name} is melee — must be on the same tile.`);
-    spendEnergy(atkSide, -weapon.energyCost); // refund
-    return false;
-  }
-  if (weapon.subtype !== 'melee' && dist > weapon.range) {
-    logMsg('system', `${weapon.name} max range is ${weapon.range} — target is ${dist} away.`);
-    spendEnergy(atkSide, -weapon.energyCost); // refund
-    return false;
-  }
-
-  // Calculate damage
-  let dmg = calcDamage(attacker, weapon, dist);
-  dmg     = applyLocationBuff(dmg, attacker, atkPos[atkIdx], weapon);
-
-  // Apply active Strength buff if present
-  const strBuff = (attacker.buffs || []).find(b => b.effect === 'strength_boost');
-  if (strBuff) {
-    dmg = Math.ceil(dmg * 1.5);
-    logMsg(atkSide, `⚡ Combat Stim active — damage boosted!`);
-  }
-
-  // Resolve armor
-  const { finalDmg, armorNote } = applyArmor(target, dmg, weapon.subtype);
-
-  // Apply damage
-  target.hp = Math.max(0, target.hp - finalDmg);
-  if (target.hp <= 0) target.ko = true;
-
-  // Track totals
-  if (atkSide === 'player') G.playerDmgDealt += finalDmg;
-  else                      G.botDmgDealt    += finalDmg;
-
-  const rangePct = weapon.subtype === 'melee'
-    ? '(melee)'
-    : `(${dist}/${weapon.range} range — ${Math.round((dist / weapon.range) * 100)}% dmg)`;
-
-  logMsg(atkSide,
-    `${attacker.name} fires ${weapon.name} → ${finalDmg} dmg to ${target.name} ${rangePct}${armorNote}.`
-  );
-  if (target.ko) logMsg('damage', `💀 ${target.name} is KO'd!`);
-
-  // Conquerors synergy: Spoils — refund 2 Energy per hit
-  if (attacker.faction === 'conquerors' && attacker.ability.startsWith('Spoils')) {
-    spendEnergy(atkSide, -2); // negative spend = refund
-    logMsg(atkSide, `⚒️ Spoils: 2 Energy refunded to ${atkSide} squad.`);
-  }
-
-  return true;
+function playerScrapCard(cardId) {
+  if (!G.awaitingScrapChoice) return;
+  const card = G.playerHand.find(c => c.id === cardId) || G.playerInPlay.find(c => c.id === cardId);
+  if (!card) return;
+  G.playerHand   = G.playerHand.filter(c   => c.id !== cardId);
+  G.playerInPlay = G.playerInPlay.filter(c => c.id !== cardId);
+  logMsg('player', `You scrap ${card.name}.`);
+  G.awaitingScrapChoice = false;
+  render();
 }
 
-// ── Consumables ───────────────────────────────────────────────────────────────
+// ── Card playability ──────────────────────────────────────────────────────────
 
 /**
- * Uses a consumable from the squad's shared inventory.
- * Removes it from the inventory on use.
+ * Returns true if the given card is legally playable by the player this phase.
+ * Used both by the UI (greying out cards) and the auto-skip timer.
  *
- * @param {'player'|'bot'} side
- * @param {string} consumableId
- * @param {number} targetIdx  — which Blaster on the side benefits
+ * Checks:
+ *   - Game not over
+ *   - Player hasn't acted yet (or it's a dual-wield second shot)
+ *   - Phase matches weapon speed (Deadeye gets revolvers one phase early)
+ *   - Weapon has ammo remaining
+ *   - Character subtype restrictions (dual_wield, deadeye, swift_melee, etc.)
+ *   - Commando Cole (run_and_gun) must have moved before attacking
+ *   - Range: melee needs dist=0; ranged needs dist <= card.range
+ *   - Defense: healing cards only usable when missing HP
+ *
+ * @param {{ type: string, subtype?: string, speed?: string, ammo?: number,
+ *           dualWieldPairId?: string, healAmount?: number, range?: number }} card
  * @returns {boolean}
  */
-function useConsumable(side, consumableId, targetIdx) {
-  const inv   = side === 'player' ? G.playerConsumables : G.botConsumables;
-  const squad = side === 'player' ? G.playerSquad       : G.botSquad;
-  const idx   = inv.findIndex(c => c.id === consumableId);
-  if (idx === -1) { logMsg('system', 'Consumable not found.'); return false; }
+function isCardPlayable(card) {
+  if (G.gameOver) return false;
+  const isPairedCard = G.playerChar.attribute === 'dual_wield' && card.dualWieldPairId != null;
+  if (isPairedCard && G.dualWieldFiredIds.has(card.id)) return false;
+  if (!isPairedCard && G.playerActedThisPhase) return false;
 
-  const item   = inv[idx];
-  const target = squad[targetIdx];
-  if (!target) return false;
+  const phase = PHASES[G.phase];
 
-  switch (item.effect) {
-    case 'heal_full': {
-      const healed = healBlaster(target, target.maxHp);
-      logMsg(side, `${item.name}: ${target.name} fully restored (+${healed} HP).`);
-      if (side === 'player') G.playerHealTotal += healed;
-      else                   G.botHealTotal    += healed;
-      break;
+  if (card.type === 'weapon') {
+    const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
+    let allowedPhase = card.speed;
+    if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
+      const idx = PHASE_ORDER.indexOf(card.speed);
+      if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
     }
-    case 'energy_refill': {
-      const add = target.stamina - (side === 'player' ? G.playerEnergy : G.botEnergy);
-      if (side === 'player') G.playerEnergy = Math.min(target.stamina, G.playerEnergy + target.stamina);
-      else                   G.botEnergy    = Math.min(target.stamina, G.botEnergy + target.stamina);
-      logMsg(side, `${item.name}: Energy bar filled (+${Math.max(0,add)}).`);
-      break;
-    }
-    case 'stamina_restore': {
-      // Stamina degradation not yet implemented — placeholder
-      logMsg(side, `${item.name}: ${target.name}'s Stamina restored to max.`);
-      break;
-    }
-    case 'enemy_blind': {
-      // Blind: mark opposing squad's next Blaster action as skipped
-      const oppSquad = side === 'player' ? G.botSquad : G.playerSquad;
-      oppSquad.forEach(b => { if (!b.ko) b.buffs.push({ effect: 'blinded', turnsLeft: 1 }); });
-      logMsg(side, `${item.name}: Enemy squad blinded — next actions skipped!`);
-      break;
-    }
-    case 'revive': {
-      if (!target.ko) { logMsg('system', `${target.name} is not KO'd — can't revive.`); return false; }
-      target.ko = false;
-      target.hp = Math.round(target.maxHp * 0.25);
-      logMsg(side, `${item.name}: ${target.name} revived at 25% HP!`);
-      break;
-    }
-    default:
-      logMsg('system', `Unknown consumable effect: ${item.effect}`);
-      return false;
+    if (phase !== allowedPhase && phase !== card.speed) return false;
+    if (card.ammo <= 0) return false;
+    if (G.playerChar.attribute === 'dual_wield'         && card.subtype !== 'pistol'        && card.subtype !== 'revolver')     return false;
+    if (G.playerChar.attribute === 'deadeye'            && card.subtype !== 'revolver'      && card.subtype !== 'pistol')       return false;
+    if (G.playerChar.attribute === 'pistol_specialist'  && card.subtype !== 'pistol')                                           return false;
+    if (G.playerChar.attribute === 'revolver_specialist'&& card.subtype !== 'revolver')                                         return false;
+    if (G.playerChar.attribute === 'swift_melee'        && card.subtype !== 'melee')                                            return false;
+    if (G.playerChar.attribute === 'rifle_specialist'   && card.subtype !== 'assault_rifle' && card.subtype !== 'sniper')       return false;
+    if (G.playerChar.attribute === 'run_and_gun'        && !G.playerMovedThisPhase)                                             return false;
+    const dist = getDistance(G.playerPos, G.botPos);
+    if (card.subtype === 'melee') return dist === 0;
+    return dist <= card.range;
   }
 
-  inv.splice(idx, 1); // consume it
-  return true;
-}
-
-// ── Ability ───────────────────────────────────────────────────────────────────
-
-/**
- * Activates a Blaster's special ability.
- * Ability is gated by ABILITY_DRAIN_AMOUNT of current Energy.
- * Each Blaster can only use their ability once per round (abilityUsed flag).
- *
- * Abilities are resolved by matching the ability string prefix to known effects.
- * Full ability implementations will be expanded here as Blasters are finalised.
- *
- * @param {'player'|'bot'} side
- * @param {number} blasterIdx
- * @returns {boolean}
- */
-function useAbility(side, blasterIdx) {
-  const squad  = side === 'player' ? G.playerSquad : G.botSquad;
-  const b      = squad[blasterIdx];
-  if (!b || b.ko)           { logMsg('system', 'Blaster is KO\'d.');                return false; }
-  if (b.abilityUsed)        { logMsg('system', `${b.name}'s ability already used this round.`); return false; }
-
-  // Energy gate: must spend ABILITY_DRAIN_AMOUNT of current squad Energy
-  const currentEnergy = side === 'player' ? G.playerEnergy : G.botEnergy;
-  const abilityCost   = Math.ceil(currentEnergy * ABILITY_DRAIN_AMOUNT);
-  if (!spendEnergy(side, abilityCost)) return false;
-
-  b.abilityUsed = true;
-  const abil    = b.ability || '';
-
-  // ── Ability resolver ───────────────────────────────────────────────────────
-  if (abil.startsWith('Rally')) {
-    // Alpha Agents: boost squad Energy regen for 1 round (grant +2 Energy now)
-    if (side === 'player') G.playerEnergy += 2;
-    else                   G.botEnergy    += 2;
-    logMsg(side, `🎖️ ${b.name} Rallies the squad — +2 Energy!`);
-
-  } else if (abil.startsWith('Vanish')) {
-    // Agent Sable: next attack ignores armor
-    b.buffs.push({ effect: 'ignore_armor', turnsLeft: 1 });
-    logMsg(side, `🕶️ ${b.name} Vanishes — next attack bypasses armor!`);
-
-  } else if (abil.startsWith('Bulwark')) {
-    // Shield Warden: absorb next hit for one ally
-    const ally = squad.find((a, i) => !a.ko && i !== blasterIdx);
-    if (ally) {
-      ally.buffs.push({ effect: 'absorb_next_hit', turnsLeft: 1 });
-      logMsg(side, `🛡️ ${b.name} covers ${ally.name} — next hit absorbed!`);
+  if (card.type === 'defense') {
+    if (G.playerChar.attribute === 'extra_carry') return false; // Tracy Guns: weapons only
+    if (G.playerChar.attribute === 'dual_wield')  return false; // Pete: weapons only
+    if (card.healAmount > 0) {
+      return G.playerChar.hp < G.playerChar.maxHp &&
+             G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;
     }
-
-  } else if (abil.startsWith('Iron Fist')) {
-    // Lord Kaine: next hit +20% of own Health as bonus damage
-    b.buffs.push({ effect: 'iron_fist', turnsLeft: 1, bonus: Math.round(b.health * 0.2) });
-    logMsg(side, `⚔️ ${b.name} charges Iron Fist — next hit +${Math.round(b.health * 0.2)} bonus dmg!`);
-
-  } else if (abil.startsWith('Suppress')) {
-    // Enforcer Drak: reduce opposing active Blaster's Energy regen (reduce their energy by 2)
-    if (side === 'player') G.botEnergy    = Math.max(0, G.botEnergy    - 2);
-    else                   G.playerEnergy = Math.max(0, G.playerEnergy - 2);
-    logMsg(side, `🦾 ${b.name} Suppresses the enemy — -2 Energy!`);
-
-  } else if (abil.startsWith('Shadow Step')) {
-    // Wraith: next action costs 0 Energy (grant back the ability cost)
-    spendEnergy(side, -abilityCost);
-    b.buffs.push({ effect: 'free_action', turnsLeft: 1 });
-    logMsg(side, `🥷 ${b.name} Shadow Steps — next action is free!`);
-
-  } else if (abil.startsWith('Last Stand')) {
-    // Grit: below 20% HP, strength doubles (implemented in calcDamage via buff)
-    if (b.hp / b.maxHp <= 0.20) {
-      b.buffs.push({ effect: 'strength_double', turnsLeft: 2 });
-      logMsg(side, `💪 ${b.name} Last Stand — Strength doubled for 2 rounds!`);
-    } else {
-      logMsg('system', `${b.name} needs to be below 20% HP to trigger Last Stand.`);
-      spendEnergy(side, -abilityCost); // refund
-      b.abilityUsed = false;
-      return false;
-    }
-
-  } else if (abil.startsWith('Signal Boost')) {
-    // Beacon: next ally gets +3 Energy
-    const ally = squad.find((a, i) => !a.ko && i !== blasterIdx);
-    if (ally) {
-      if (side === 'player') G.playerEnergy += 3;
-      else                   G.botEnergy    += 3;
-      logMsg(side, `📡 ${b.name} Signal Boosts — squad gains +3 Energy!`);
-    }
-
-  } else if (abil.startsWith('Vanguard')) {
-    // Trailblazer: first action this match costs 0 Energy (refund ability cost)
-    spendEnergy(side, -abilityCost);
-    b.buffs.push({ effect: 'free_action', turnsLeft: 1 });
-    logMsg(side, `🌅 ${b.name} takes the Vanguard — next action is free!`);
-
-  } else if (abil.startsWith('Drain')) {
-    // Void: steal 3 Energy from the active enemy
-    const steal = 3;
-    if (side === 'player') {
-      G.botEnergy    = Math.max(0, G.botEnergy    - steal);
-      G.playerEnergy += steal;
-    } else {
-      G.playerEnergy = Math.max(0, G.playerEnergy - steal);
-      G.botEnergy    += steal;
-    }
-    logMsg(side, `🌑 ${b.name} Drains ${steal} Energy from the enemy!`);
-
-  } else if (abil.startsWith('Reweave')) {
-    // Loom: reset one ally's energy to full (fill squad energy)
-    if (side === 'player') G.playerEnergy = Math.min(G.round + (G.playerEnergyBank || 0), 10);
-    else                   G.botEnergy    = Math.min(G.round + (G.botEnergyBank    || 0), 10);
-    logMsg(side, `🧵 ${b.name} Reweaves the squad Energy bar to full!`);
-
-  } else if (abil.startsWith('Mercenary')) {
-    // Dex: copy last ally ability used (placeholder — logs intent)
-    logMsg(side, `🎯 ${b.name} copies the last ally ability used!`);
-
-  } else if (abil.startsWith('Mimic')) {
-    // Echo: reflect 15% of next hit back
-    b.buffs.push({ effect: 'reflect_15', turnsLeft: 1 });
-    logMsg(side, `🪞 ${b.name} activates Mimic — 15% reflect on next hit!`);
-
-  } else {
-    // Generic fallback for unimplemented abilities
-    logMsg(side, `✨ ${b.name} uses ${abil.split('—')[0].trim()}!`);
+    return true;
   }
 
-  return true;
+  return false;
 }
 
-// ── Retreat ───────────────────────────────────────────────────────────────────
+// ── Win condition ─────────────────────────────────────────────────────────────
 
 /**
- * Called when the player clicks the retreat button.
- * Saves Endurance, shows the result modal.
+ * Checks whether the game has ended and calls endGame() if so.
+ * Called after every action and at the start of every phase.
+ *
+ * Win conditions:
+ *   1. Either character reaches 0 HP → immediate knockout.
+ *   2. Turn 20, phase 3 (last phase of last turn) → score comparison.
+ *      Score = (remaining HP / maxHP) × (damage dealt + healing done).
+ *      Proportional HP prevents high-max-HP characters winning on stats alone.
  */
-function retreat() {
+function checkWin() {
   if (G.gameOver) return;
-  if (!confirm('Retreat? Your Blasters\' Endurance will still be drained.')) return;
-  clearActionTimer();
-  logMsg('system', '🏳️ You retreated from battle.');
-  endGame('retreat');
+  if (G.playerChar.hp <= 0) { endGame('bot');    return; }
+  if (G.botChar.hp   <= 0) { endGame('player'); return; }
+  if (G.turn >= MAX_TURNS && G.phase === 3) {
+    const pScore = (G.playerChar.hp / G.playerChar.maxHp) * (G.playerDmgDealt + G.playerHealTotal);
+    const bScore = (G.botChar.hp   / G.botChar.maxHp)    * (G.botDmgDealt    + G.botHealTotal);
+    if      (pScore > bScore) endGame('player', true);
+    else if (bScore > pScore) endGame('bot',    true);
+    else                      endGame('draw',   true);
+  }
 }
 
-// ── End modal HTML ────────────────────────────────────────────────────────────
+// ── Modal stats builder ───────────────────────────────────────────────────────
 
 /**
- * Builds the inner HTML for the end-game modal stats panel.
- *
- * @param {'player'|'bot'|'draw'|'retreat'} winner
- * @param {number} elapsed  — seconds
- * @returns {string} HTML
+ * Returns true if the player's value is >= the bot's (used to highlight the
+ * winning stat box with a faction-coloured glow).
  */
-function buildEndModalHTML(winner, elapsed) {
-  const mins    = Math.floor(elapsed / 60);
-  const secs    = elapsed % 60;
-  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+function glowClassPlayer(playerVal, botVal) { return playerVal >= botVal; }
 
-  const pAlive  = G.playerSquad.filter(b => !b.ko).length;
-  const bAlive  = G.botSquad.filter(b => !b.ko).length;
-  const pHp     = G.playerSquad.reduce((s, b) => s + b.hp, 0);
-  const bHp     = G.botSquad.reduce((s, b) => s + b.hp, 0);
-  const pMaxHp  = G.playerSquad.reduce((s, b) => s + b.maxHp, 0);
-  const bMaxHp  = G.botSquad.reduce((s, b) => s + b.maxHp, 0);
+/**
+ * Returns true if the bot's value is >= the player's.
+ */
+function glowClassBot(playerVal, botVal) { return botVal >= playerVal; }
 
-  const pColor  = winner === 'player' ? '#44ff88' : winner === 'bot' ? '#ff4444' : '#aaaaaa';
-  const bColor  = winner === 'bot'    ? '#44ff88' : winner === 'player' ? '#ff4444' : '#aaaaaa';
+/**
+ * Builds the inner HTML for the end-game / retreat modal stats panel.
+ * Computes a normalised Battle Score using tanh(net damage) + survivability bonus.
+ *
+ * Battle Score formula:
+ *   netPlayer    = playerDmgDealt - botHealTotal
+ *   netBot       = botDmgDealt - playerHealTotal
+ *   rawBattle    = netPlayer - netBot
+ *   scale        = max(1, (totalDmg + totalHeal) / 2)   — prevents tanh saturating early
+ *   survivBonus  = turnFrac × (pHpRatio - bHpRatio) - earlyExitPenalty
+ *   battleFinal  = tanh(rawBattle / scale) + survivBonus
+ *
+ * @param {{
+ *   pImg: string, bImg: string,
+ *   pDeadOverlay?: string, bDeadOverlay?: string,
+ *   pDead?: boolean, bDead?: boolean,
+ *   pBorderColor: string, bBorderColor: string,
+ *   pFactionColor?: string, bFactionColor?: string,
+ *   timeStr: string, elapsed: number,
+ *   isRetreat?: boolean,
+ *   winner?: string
+ * }} opts
+ * @returns {string} HTML string
+ */
+function buildModalStatsHTML(opts) {
+  const {
+    pImg, bImg,
+    pDeadOverlay = '', bDeadOverlay = '',
+    pDead = false, bDead = false,
+    pBorderColor, bBorderColor,
+    pFactionColor = 'var(--hero)', bFactionColor = 'var(--villain)',
+    timeStr, elapsed,
+    isRetreat = false,
+    winner = 'player'
+  } = opts;
 
-  const squadRows = (squad, color) => squad.map(b => `
-    <div class="modal-blaster-row" style="opacity:${b.ko ? 0.45 : 1};">
-      <span class="modal-blaster-icon">${b.icon}</span>
-      <span class="modal-blaster-name" style="color:${color};">${b.name}</span>
-      <span class="modal-blaster-hp">${b.ko ? '💀' : `${b.hp}/${b.maxHp} HP`}</span>
-    </div>`).join('');
+  const netPlayer  = G.playerDmgDealt - G.botHealTotal;
+  const netBot     = G.botDmgDealt    - G.playerHealTotal;
+  const rawBattle  = netPlayer - netBot;
+
+  const MAX_EARLY_EXIT_PENALTY = 0.554;
+  const completionRatio  = G.turn / MAX_TURNS;
+  const earlyExitPenalty = isRetreat
+    ? Math.pow(1 - completionRatio, 2) * MAX_EARLY_EXIT_PENALTY
+    : 0;
+
+  const turnFrac    = Math.min(G.turn, MAX_TURNS) / MAX_TURNS;
+  const pHpRatio    = G.playerChar.hp / G.playerChar.maxHp;
+  const bHpRatio    = G.botChar.hp    / G.botChar.maxHp;
+  const survivBonus = turnFrac * (pHpRatio - bHpRatio) - earlyExitPenalty;
+
+  const scale       = Math.max(1, (G.playerDmgDealt + G.botDmgDealt + G.playerHealTotal + G.botHealTotal) / 2);
+  const battleFinal = Math.tanh(rawBattle / scale) + survivBonus;
+
+  const battleFinalDisplay = (battleFinal >= 0 ? '+' : '') + (Math.round(battleFinal * 1000) / 1000).toFixed(3);
+  const battleFinalColor   = battleFinal >= 0 ? '#44ff88' : '#ff4444';
+  const survivSign         = survivBonus >= 0 ? '+' : '';
+  const survivStr          = `${survivSign}${(Math.round(survivBonus * 1000) / 1000).toFixed(3)}`;
+
+  const dmgGlowP  = glowClassPlayer(G.playerDmgDealt,  G.botDmgDealt);
+  const dmgGlowB  = glowClassBot   (G.playerDmgDealt,  G.botDmgDealt);
+  const healGlowP = glowClassPlayer(G.playerHealTotal,  G.botHealTotal);
+  const healGlowB = glowClassBot   (G.playerHealTotal,  G.botHealTotal);
 
   return `
     <div class="modal-stat-split">
       <div class="split-left">
-        <div class="modal-stat-label">⏱ ROUNDS</div>
-        <div class="modal-stat-value">${G.round} / ${MAX_TURNS}</div>
+        <div class="modal-stat-label">⏱ TURNS ⏱</div>
+        <div class="modal-stat-value">${G.turn} / ${MAX_TURNS}</div>
       </div>
       <div class="split-right">
-        <div class="modal-stat-label">🕐 TIME</div>
+        <div class="modal-stat-label">🕐 MATCH TIME 🕐</div>
         <div class="modal-stat-value">${timeStr}</div>
       </div>
     </div>
-    <div class="modal-squad-block" style="border-color:${pColor};">
-      <div class="modal-squad-label" style="color:${pColor};">YOUR SQUAD — ${pAlive}/5 alive</div>
-      ${squadRows(G.playerSquad, pColor)}
+    <div class="modal-char-card" style="border-color:${pBorderColor}">
+      ${pImg}${pDeadOverlay}
+      <div class="modal-char-info">
+        <div class="modal-char-name" style="color:${pFactionColor};">${G.playerChar.name}</div>
+        <div class="modal-char-hp" style="color:${pDead ? '#ff4444' : pFactionColor};">${G.playerChar.hp} <span class="modal-char-maxhp">/ ${G.playerChar.maxHp} HP</span></div>
+      </div>
     </div>
-    <div class="modal-squad-block" style="border-color:${bColor};">
-      <div class="modal-squad-label" style="color:${bColor};">BOT SQUAD — ${bAlive}/5 alive</div>
-      ${squadRows(G.botSquad, bColor)}
+    <div class="modal-char-card" style="border-color:${bBorderColor}">
+      ${bImg}${bDeadOverlay}
+      <div class="modal-char-info">
+        <div class="modal-char-name" style="color:${bFactionColor};">${G.botChar.name}</div>
+        <div class="modal-char-hp" style="color:${bDead ? '#ff4444' : bFactionColor};">${G.botChar.hp} <span class="modal-char-maxhp">/ ${G.botChar.maxHp} HP</span></div>
+      </div>
     </div>
-    <div class="modal-stat"><div class="modal-stat-label">Your Dmg</div><div class="modal-stat-value">${G.playerDmgDealt}</div></div>
-    <div class="modal-stat"><div class="modal-stat-label">Bot Dmg</div><div class="modal-stat-value">${G.botDmgDealt}</div></div>
-    <div class="modal-stat"><div class="modal-stat-label">Your Healing</div><div class="modal-stat-value">${G.playerHealTotal}</div></div>
-    <div class="modal-stat"><div class="modal-stat-label">Bot Healing</div><div class="modal-stat-value">${G.botHealTotal}</div></div>
-    <div class="modal-stat"><div class="modal-stat-label">Your HP%</div><div class="modal-stat-value">${Math.round(pHp/pMaxHp*100)}%</div></div>
-    <div class="modal-stat"><div class="modal-stat-label">Bot HP%</div><div class="modal-stat-value">${Math.round(bHp/bMaxHp*100)}%</div></div>
+    <div class="modal-stat" style="${dmgGlowP ? `border-color:${pFactionColor};box-shadow:0 0 10px ${pFactionColor}44;` : ''}"><div class="modal-stat-label">Your Dmg Dealt</div><div class="modal-stat-value">${G.playerDmgDealt}</div></div>
+    <div class="modal-stat" style="${dmgGlowB ? `border-color:${bFactionColor};box-shadow:0 0 10px ${bFactionColor}44;` : ''}"><div class="modal-stat-label">Bot Dmg Dealt</div><div class="modal-stat-value">${G.botDmgDealt}</div></div>
+    <div class="modal-stat" style="${healGlowP ? `border-color:${pFactionColor};box-shadow:0 0 10px ${pFactionColor}44;` : ''}"><div class="modal-stat-label">Your Healing</div><div class="modal-stat-value">${G.playerHealTotal}</div></div>
+    <div class="modal-stat" style="${healGlowB ? `border-color:${bFactionColor};box-shadow:0 0 10px ${bFactionColor}44;` : ''}"><div class="modal-stat-label">Bot Healing</div><div class="modal-stat-value">${G.botHealTotal}</div></div>
+    <div class="modal-stat" style="grid-column:1/-1;background:${battleFinal >= 0 ? 'rgba(30,90,40,0.45)' : 'rgba(90,20,20,0.45)'};border-color:${battleFinal >= 0 ? 'rgba(68,255,136,0.7)' : 'rgba(255,68,68,0.7)'};box-shadow:0 0 12px ${battleFinal >= 0 ? 'rgba(68,255,136,0.35)' : 'rgba(255,68,68,0.35)'};">
+      <div class="modal-stat-label" style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span>⭐Battle Score⭐</span>
+        <span style="font-size:0.58rem;color:var(--muted);">tanh(DMG−HEAL) + ⛉️${survivStr}${earlyExitPenalty > 0 ? ` ·⚠︎EXIT −${earlyExitPenalty.toFixed(2)}` : ''}</span>
+      </div>
+      <div class="modal-stat-value" style="font-size:1.3rem;color:${battleFinalColor};">${battleFinalDisplay}</div>
+    </div>
   `;
+}
+
+// ── End game & retreat ────────────────────────────────────────────────────────
+
+/**
+ * Ends the match, plays end music, and displays the result modal.
+ *
+ * @param {'player'|'bot'|'draw'} winner
+ * @param {boolean} [timeLimit=false] - True when the match ended on turn limit
+ */
+function endGame(winner, timeLimit = false) {
+  G.gameOver = true;
+  BB_Audio.playEndMusic(winner, G.playerChar.faction);
+
+  const won     = winner === 'player';
+  const draw    = winner === 'draw';
+  const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
+  const mins    = Math.floor(elapsed / 60);
+  const secs    = elapsed % 60;
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
+  const pHealWon = G.playerHealTotal > G.botHealTotal;
+  const edge     = !pDmgWon && !pHealWon ? 'DMG & Healing'
+    : !pDmgWon  ? 'DMG'
+    : !pHealWon ? 'Healing'
+    : 'neither stat';
+
+  let title, msg;
+  if (draw) {
+    title = '🤝 DRAW!';
+    msg   = `You and ${G.botChar.name} somehow ended up with equal DMG & Healing!`;
+  } else if (timeLimit) {
+    title = won ? '🏆 VICTORY! ⏳' : '💀 DEFEATED ⏳';
+    msg   = won
+      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
+      : `Time's up — ${G.botChar.name} outscored you in ${edge}.`;
+  } else {
+    title = won ? '🏆 VICTORY!' : '💀 DEFEATED';
+    msg   = won
+      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
+      : (G.lastKillingBlow
+          ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.`
+          : `${G.botChar.name} has eliminated you.`);
+  }
+
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-msg').textContent   = msg;
+
+  const shadowFilter  = 'brightness(0.35) saturate(0.2) hue-rotate(200deg) contrast(1.3) sepia(0.4)';
+  const pFactionColor = G.playerChar.faction === 'villain' ? 'var(--villain)' : 'var(--hero)';
+  const bFactionColor = G.botChar.faction    === 'villain' ? 'var(--villain)' : 'var(--hero)';
+  const pPortraitBg   = G.playerChar.faction === 'villain' ? 'rgba(196,75,255,0.1)' : 'rgba(74,184,255,0.1)';
+  const bPortraitBg   = G.botChar.faction    === 'villain' ? 'rgba(196,75,255,0.1)' : 'rgba(74,184,255,0.1)';
+  const pIsShadow     = G.playerChar.name.startsWith('Dark ');
+  const bIsShadow     = G.botChar.name.startsWith('Dark ');
+  const pSrc          = pIsShadow && G.botChar.img    ? G.botChar.img    : G.playerChar.img;
+  const bSrc          = bIsShadow && G.playerChar.img ? G.playerChar.img : G.botChar.img;
+  const pImgStyle     = pIsShadow ? ` style="filter:${shadowFilter};"` : '';
+  const bImgStyle     = bIsShadow ? ` style="filter:${shadowFilter};"` : '';
+
+  const pDead = G.playerChar.hp <= 0;
+  const bDead = G.botChar.hp   <= 0;
+  const pImg  = pSrc ? `<img class="modal-char-img" src="${pSrc}"${pImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${pPortraitBg};">${G.playerChar.icon}</div>`;
+  const bImg  = bSrc ? `<img class="modal-char-img" src="${bSrc}"${bImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${bPortraitBg};">${G.botChar.icon}</div>`;
+
+  document.getElementById('modal-stats').innerHTML = buildModalStatsHTML({
+    pImg, bImg,
+    pDeadOverlay: pDead ? `<div class="modal-dead-overlay">💀</div>` : '',
+    bDeadOverlay: bDead ? `<div class="modal-dead-overlay">💀</div>` : '',
+    pDead, bDead,
+    pFactionColor, bFactionColor,
+    pBorderColor: pDead ? '#7a0000' : pFactionColor,
+    bBorderColor: bDead ? '#7a0000' : bFactionColor,
+    timeStr, elapsed,
+    isRetreat: false,
+    winner
+  });
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+/**
+ * Called when the player clicks the retreat (🏳) button.
+ * Confirms, stops the phase timer, and shows the escaped modal.
+ */
+function retreat() {
+  if (G.gameOver) return;
+  if (!confirm('Are you sure you would like to retreat? The match will end immediately.')) return;
+
+  clearPhaseTimer();
+  logMsg('system', '🏳️ You retreated from battle.');
+  G.gameOver = true;
+
+  const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
+  const mins    = Math.floor(elapsed / 60);
+  const secs    = elapsed % 60;
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  const shadowFilter  = 'brightness(0.35) saturate(0.2) hue-rotate(200deg) contrast(1.3) sepia(0.4)';
+  const rPFaction     = G.playerChar.faction === 'villain' ? 'var(--villain)' : 'var(--hero)';
+  const rBFaction     = G.botChar.faction    === 'villain' ? 'var(--villain)' : 'var(--hero)';
+  const rPPortBg      = G.playerChar.faction === 'villain' ? 'rgba(196,75,255,0.1)' : 'rgba(74,184,255,0.1)';
+  const rBPortBg      = G.botChar.faction    === 'villain' ? 'rgba(196,75,255,0.1)' : 'rgba(74,184,255,0.1)';
+  const rPIsShadow    = G.playerChar.name.startsWith('Dark ');
+  const rBIsShadow    = G.botChar.name.startsWith('Dark ');
+  const rPSrc         = rPIsShadow && G.botChar.img    ? G.botChar.img    : G.playerChar.img;
+  const rBSrc         = rBIsShadow && G.playerChar.img ? G.playerChar.img : G.botChar.img;
+  const rPImgStyle    = rPIsShadow ? ` style="filter:${shadowFilter};"` : '';
+  const rBImgStyle    = rBIsShadow ? ` style="filter:${shadowFilter};"` : '';
+  const rPImg         = rPSrc ? `<img class="modal-char-img" src="${rPSrc}"${rPImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${rPPortBg};">${G.playerChar.icon}</div>`;
+  const rBImg         = rBSrc ? `<img class="modal-char-img" src="${rBSrc}"${rBImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${rBPortBg};">${G.botChar.icon}</div>`;
+
+  document.getElementById('modal-title').textContent = '🏳️ ESCAPED';
+  document.getElementById('modal-msg').textContent   = 'You live to fight another battle.';
+  document.getElementById('modal-stats').innerHTML   = buildModalStatsHTML({
+    pImg: rPImg, bImg: rBImg,
+    pBorderColor: rPFaction, bBorderColor: rBFaction,
+    pFactionColor: rPFaction, bFactionColor: rBFaction,
+    timeStr, elapsed,
+    isRetreat: true,
+    winner: 'retreat'
+  });
+  document.getElementById('modal-overlay').classList.remove('hidden');
 }
