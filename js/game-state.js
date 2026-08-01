@@ -1,23 +1,26 @@
 /**
- * game-state.js — Blast Battles game state management & phase engine
+ * game-state.js — Blast Battles game state management & turn engine
  * Dependencies (must load first): data.js, utils.js, grid.js, combat.js
  * Reads/writes the global `G` object.
  * Calls: render() (render.js), updateHint() (render.js),
- *        botMoveSmart() (ai-bot.js), botPlayPhase() (ai-bot.js),
- *        impossibleBotPlayPhase() (ai-bot.js), loadOnnxModel() (ai-bot.js)
+ *        botMoveSmart() (ai-bot.js), botPlayTurn() (ai-bot.js),
+ *        impossibleBotPlayTurn() (ai-bot.js), loadOnnxModel() (ai-bot.js)
  *
  * Exports (browser globals):
  *   startWithDifficulty(diff)
  *   initGame()
- *   startPhase()
- *   advancePhase()
- *   checkPhaseComplete()
- *   skipPhase()
- *   clearPhaseTimer()
- *   startPhaseTimer()
+ *   startTurn()
+ *   advanceTurn()
+ *   checkTurnComplete()
+ *   skipTurn()
+ *   clearTurnTimer()
+ *   startTurnTimer()
  *   updateTimerDisplay()
- *   getPhaseSpeed()
- *   updatePhaseSpeed(val)
+ *   getTurnSpeed()
+ *   updateTurnSpeed(val)
+ *   getActionCost()
+ *   canAffordAction()
+ *   spendEnergy()
  *   hasAnyPlayableCard()
  *   playerPlayCard(card)
  *   playerPlaySelectedCard()
@@ -35,10 +38,13 @@ let G = {};
 /** Set by char-select.js when the player confirms their character. */
 let _selectedCharId = null;
 
-/** Phase timer state */
-const PHASE_DURATIONS = { fast: 15, medium: 15, slow: 15, charged: 15 };
-let _phaseTimerInterval = null;
-let _phaseTimeLeft = 15;
+/** Turn timer state */
+let TURN_DURATION= 15;
+const ACTION_ENERGY_COST = {1, 1, 2, 2, 3, 4, 5, 6, 7};
+let K_DRAIN = 1;
+let K_RECOVER = 1;
+let _turnTimerInterval = null;
+let _turnTimeLeft = 15;
 let _autoCheckTimeout = null;
 
 // ── Difficulty entry point ────────────────────────────────────────────────────
@@ -65,9 +71,9 @@ async function startWithDifficulty(diff) {
 function initGame() {
   document.getElementById('modal-overlay').classList.add('hidden');
 
-  // Reset phase speed slider to 1×
-  const slider = document.getElementById('phase-speed-slider');
-  if (slider) { slider.value = 1; updatePhaseSpeed(1); }
+  // Reset Turn speed slider to 1×
+  const slider = document.getElementById('turn-speed-slider');
+  if (slider) { slider.value = 1; updateTurnSpeed(1);}
 
   // Fresh shuffled decks
   const weaponDeck = shuffle(deepClone(WEAPON_POOL));
@@ -171,7 +177,14 @@ function initGame() {
   // Reset G — player starts top-left (0), bot starts bottom-right (48)
   G = {
     turn: 1,
-    phase: 0,
+    playerEnergy: 0,
+    botEnergy: 0,
+    playerStamina: 100,
+    botStamina: 100,
+    playerLockedOut: false,
+    botLockedOut: false,
+    playerSpentThisTurn: 0,
+    botSpentThisTurn: 0,
     difficulty: G.difficulty || 'medium',
     playerChar: deepClone(playerChar),
     botChar: deepClone(botChar),
@@ -185,12 +198,12 @@ function initGame() {
     weaponDeck,
     defenseDeck,
     selectedCard: null,
-    playerActedThisPhase: false,
-    botActedThisPhase: false,
+    playerActedThisTurn: false,
+    botActedThisTurn: false,
     awaitingMove: false,
     awaitingScrapChoice: false,
-    playerMovedThisPhase: false,
-    xrayUsedThisPhase: false,
+    playerMovedThisTurn: false,
+    xrayUsedThisTurn: false,
     dualWieldFiredIds: new Set(),
     playerToxicTurns: 0,
     botToxicTurns: 0,
@@ -216,37 +229,37 @@ function initGame() {
 
   render();
   BB_Audio.startGameplay(G.playerChar.id);
-  startPhase();
+  startTurn();
 }
 
-// ── Phase management ──────────────────────────────────────────────────────────
+// ── Turn management ──────────────────────────────────────────────────────────
 
 /**
- * Starts the current phase (G.phase / G.turn are already set).
- * - Resets per-phase flags
+ * Starts the current Turn (G.Turn / G.turn are already set).
+ * - Resets per-Turn flags
  * - Applies location effects
  * - Determines who acts first (by speed)
  * - Launches the bot if it goes first
  * - Starts the auto-skip timer
  */
-function startPhase() {
-  G.playerActedThisPhase = false;
-  G.botActedThisPhase = false;
+function startTurn() {
+  G.playerActedThisTurn = false;
+  G.botActedThisTurn = false;
   G.selectedCard = null;
   G.awaitingMove = false;
   G.awaitingScrapChoice = false;
-  G.playerMovedThisPhase = false;
-  G.xrayUsedThisPhase = false;
+  G.playerMovedThisTurn = false;
+  G.xrayUsedThisTurn = false;
   G.dualWieldFiredIds = new Set();
-  clearPhaseTimer();
+  clearTurnTimer();
 
-  const phase = PHASES[G.phase];
-  logMsg('phase', `— ${phase.toUpperCase()} PHASE — (move OR play a card)`);
+  const Turn = TurnS[G.Turn];
+  logMsg('Turn', `— ${Turn.toUpperCase()} Turn — (move OR play a card)`);
 
-  // Location effects — damage/heal every phase; card draws on medium/charged
-  const isFirstPhase = G.turn === 1 && G.phase === 0;
-  const isCardDrawPhase = phase === 'medium' || phase === 'charged';
-  if (!isFirstPhase) applyLocationEffects(isCardDrawPhase);
+  // Location effects — damage/heal every Turn; card draws on medium/charged
+  const isFirstTurn = G.turn === 1 && G.Turn === 0;
+  const isCardDrawTurn = Turn === 'medium' || Turn === 'charged';
+  if (!isFirstTurn) applyLocationEffects(isCardDrawTurn);
   checkWin();
   if (G.gameOver) return;
 
@@ -256,28 +269,28 @@ function startPhase() {
   const isHuntressPlayer = G.playerChar.attribute === 'sniper_specialist';  // Fast & Medium
   const isTankPlayer = G.playerChar.attribute === 'explosive_specialist'; // Not Fast
 
-  const heavyMoveOk = !isTitanPlayer || phase === 'charged';
-  const samMoveOk = !isSamPlayer || phase === 'slow' || phase === 'charged';
-  const huntressMoveOk = !isHuntressPlayer || phase === 'fast' || phase === 'medium';
-  const tankMoveOk = !isTankPlayer || phase !== 'fast';
+  const heavyMoveOk = !isTitanPlayer || Turn === 'charged';
+  const samMoveOk = !isSamPlayer || Turn === 'slow' || Turn === 'charged';
+  const huntressMoveOk = !isHuntressPlayer || Turn === 'fast' || Turn === 'medium';
+  const tankMoveOk = !isTankPlayer || Turn !== 'fast';
 
   if (!heavyMoveOk) {
     G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name}'s heavy armor restricts movement to Charged phase only.`);
+    logMsg('system', `⚙️ ${G.playerChar.name}'s heavy armor restricts movement to Charged Turn only.`);
   } else if (!samMoveOk) {
     G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name} can only move during Slow & Charged phases.`);
+    logMsg('system', `⚙️ ${G.playerChar.name} can only move during Slow & Charged Turns.`);
   } else if (!huntressMoveOk) {
     G.awaitingMove = false;
-    logMsg('system', `🎯 ${G.playerChar.name} holds position — can only move on Fast & Medium phases.`);
+    logMsg('system', `🎯 ${G.playerChar.name} holds position — can only move on Fast & Medium Turns.`);
   } else if (!tankMoveOk) {
-    // Hank the Tank — fully locked during Fast phase
+    // Hank the Tank — fully locked during Fast Turn
     G.awaitingMove = false;
-    G.playerActedThisPhase = true;
-    G.botActedThisPhase = true;
-    G.playerAutoSkippedPhase = true;
-    logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast phase. Holding position...`);
-    setTimeout(() => checkPhaseComplete(), 2000);
+    G.playerActedThisTurn = true;
+    G.botActedThisTurn = true;
+    G.playerAutoSkippedTurn = true;
+    logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast Turn. Holding position...`);
+    setTimeout(() => checkTurnComplete(), 2000);
   } else {
     G.awaitingMove = true;
   }
@@ -295,12 +308,12 @@ function startPhase() {
   if (!playerFirst) {
     setTimeout(() => {
       if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisPhase = true;
+        botMoveSmart(); impossibleBotPlayTurn(); G.botActedThisTurn = true;
         render(); checkWin();
         if (!G.gameOver) { render(); updateHint(); }
       } else {
-        botMoveSmart(); botPlayPhase();
-        G.botActedThisPhase = true;
+        botMoveSmart(); botPlayTurn();
+        G.botActedThisTurn = true;
         render(); checkWin();
         if (!G.gameOver) { render(); updateHint(); }
       }
@@ -310,97 +323,97 @@ function startPhase() {
     updateHint();
   }
 
-  startPhaseTimer();
+  startTurnTimer();
 }
 
 /**
- * Advances to the next phase (or next turn).
- * Applies Sprinting Sue's extra Fast-phase move if applicable.
- * Resets per-phase flags and calls startPhase().
+ * Advances to the next Turn (or next turn).
+ * Applies Sprinting Sue's extra Fast-Turn move if applicable.
+ * Resets per-Turn flags and calls startTurn().
  */
-function advancePhase() {
-  G.phase++;
-  if (G.phase >= PHASES.length) {
-    G.phase = 0;
+function advanceTurn() {
+  G.Turn++;
+  if (G.Turn >= TurnS.length) {
+    G.Turn = 0;
     G.turn++;
     logMsg('system', `=== Turn ${G.turn} ===`);
   }
-  // Sprinting Sue: on Fast phase she may move an extra space
-  if (G.phase === 0 && G.playerChar.attribute === 'swift') {
-    G.playerMovedThisPhase = false; // fresh flag for the bonus move
+  // Sprinting Sue: on Fast Turn she may move an extra space
+  if (G.Turn === 0 && G.playerChar.attribute === 'swift') {
+    G.playerMovedThisTurn = false; // fresh flag for the bonus move
   }
-  startPhase();
+  startTurn();
 }
 
 /**
  * Checks whether both sides have finished their actions.
  * If the bot hasn't acted yet, triggers its turn now (it goes second).
- * Once both have acted, advances the phase.
+ * Once both have acted, advances the Turn.
  *
  * Bot acting after the player is the "player-first" flow; the bot acting
- * before the player is handled inside startPhase().
+ * before the player is handled inside startTurn().
  */
-function checkPhaseComplete() {
+function checkTurnComplete() {
   if (G.gameOver) return;
 
   // If the bot hasn't acted yet, trigger its turn now
-  if (!G.botActedThisPhase) {
+  if (!G.botActedThisTurn) {
     setTimeout(() => {
       if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisPhase = true;
+        botMoveSmart(); impossibleBotPlayTurn(); G.botActedThisTurn = true;
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); advancePhase(); }
+        if (!G.gameOver) { render(); updateHint(); advanceTurn(); }
       } else {
-        botMoveSmart(); botPlayPhase();
-        G.botActedThisPhase = true;
+        botMoveSmart(); botPlayTurn();
+        G.botActedThisTurn = true;
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); advancePhase(); }
+        if (!G.gameOver) { render(); updateHint(); advanceTurn(); }
       }
     }, 500);
     return;
   }
 
   // Both acted — move forward
-  advancePhase();
+  advanceTurn();
 }
 
 /**
- * Skips the player's action for the current phase (called by the timer
+ * Skips the player's action for the current Turn (called by the timer
  * or when the player clicks END TURN without acting).
- * Marks the player as having acted, then calls checkPhaseComplete.
+ * Marks the player as having acted, then calls checkTurnComplete.
  */
-function skipPhase() {
+function skipTurn() {
   if (G.gameOver) return;
-  G.playerActedThisPhase = true;
+  G.playerActedThisTurn = true;
   G.awaitingMove = false;
   G.awaitingScrapChoice = false;
   render();
-  checkPhaseComplete();
+  checkTurnComplete();
 }
 
-// ── Phase timer ───────────────────────────────────────────────────────────────
+// ── Turn timer ───────────────────────────────────────────────────────────────
 
-/** Stops any running phase timer intervals/timeouts. */
-function clearPhaseTimer() {
-  if (_phaseTimerInterval) { clearInterval(_phaseTimerInterval); _phaseTimerInterval = null; }
+/** Stops any running Turn timer intervals/timeouts. */
+function clearTurnTimer() {
+  if (_TurnTimerInterval) { clearInterval(_TurnTimerInterval); _TurnTimerInterval = null; }
   if (_autoCheckTimeout) { clearTimeout(_autoCheckTimeout); _autoCheckTimeout = null; }
-  _phaseTimeLeft = 0;
+  _TurnTimeLeft = 0;
 }
 
-/** Returns the current phase speed multiplier (1–5) from the slider. */
-function getPhaseSpeed() {
-  const slider = document.getElementById('phase-speed-slider');
+/** Returns the current Turn speed multiplier (1–5) from the slider. */
+function getTurnSpeed() {
+  const slider = document.getElementById('Turn-speed-slider');
   return slider ? parseInt(slider.value) : 1;
 }
 
 /**
- * Updates the phase-speed slider label and fill gradient.
+ * Updates the Turn-speed slider label and fill gradient.
  * @param {number} val - Speed multiplier (1–5)
  */
-function updatePhaseSpeed(val) {
-  const label = document.getElementById('phase-speed-label');
+function updateTurnSpeed(val) {
+  const label = document.getElementById('Turn-speed-label');
   if (label) label.textContent = `${val}x`;
-  const slider = document.getElementById('phase-speed-slider');
+  const slider = document.getElementById('Turn-speed-slider');
   if (slider) {
     const pct = ((val - 1) / 4) * 100;
     slider.style.setProperty('background',
@@ -408,7 +421,7 @@ function updatePhaseSpeed(val) {
   }
 }
 
-/** Returns true if the player has at least one legally playable card this phase. */
+/** Returns true if the player has at least one legally playable card this Turn. */
 function hasAnyPlayableCard() {
   const allCards = [
     ...G.playerHand,
@@ -418,56 +431,56 @@ function hasAnyPlayableCard() {
 }
 
 /**
- * Starts the countdown timer for the current phase.
+ * Starts the countdown timer for the current Turn.
  * At speed 1: 15 s.  At speed 5: 3 s.  Timer always reaches 0.
  *
  * Auto-skip behaviour at 0:
- *   • Player already acted → checkPhaseComplete
- *   • Pete fired first shot only → log miss, mark acted, checkPhaseComplete
- *   • speed > 1 and no playable cards → log wait, skipPhase
- *   • otherwise → log "Time up!", skipPhase
+ *   • Player already acted → checkTurnComplete
+ *   • Pete fired first shot only → log miss, mark acted, checkTurnComplete
+ *   • speed > 1 and no playable cards → log wait, skipTurn
+ *   • otherwise → log "Time up!", skipTurn
  */
-function startPhaseTimer() {
-  const speed = getPhaseSpeed();
+function startTurnTimer() {
+  const speed = getTurnSpeed();
   const totalSecs = Math.ceil(15 / speed);
-  _phaseTimeLeft = totalSecs;
+  _TurnTimeLeft = totalSecs;
   updateTimerDisplay();
 
   if (_autoCheckTimeout) clearTimeout(_autoCheckTimeout);
 
-  _phaseTimerInterval = setInterval(() => {
-    _phaseTimeLeft--;
+  _TurnTimerInterval = setInterval(() => {
+    _TurnTimeLeft--;
     updateTimerDisplay();
-    if (_phaseTimeLeft <= 0) {
-      clearPhaseTimer();
+    if (_TurnTimeLeft <= 0) {
+      clearTurnTimer();
       if (G.gameOver) return;
 
-      if (G.playerActedThisPhase) {
-        checkPhaseComplete();
+      if (G.playerActedThisTurn) {
+        checkTurnComplete();
       } else if (G.dualWieldFiredIds && G.dualWieldFiredIds.size > 0) {
         // Pete fired first shot but ran out of time before the second
         logMsg('system', '⏱ Time up! Second shot missed.');
-        G.playerActedThisPhase = true;
-        checkPhaseComplete();
+        G.playerActedThisTurn = true;
+        checkTurnComplete();
         render();
       } else if (speed > 1 && !hasAnyPlayableCard()) {
         logMsg('system', `${G.playerChar.name} waits patiently for ${G.botChar.name}'s next play.`);
-        skipPhase();
+        skipTurn();
       } else {
         logMsg('system', '⏱ Time up!');
-        skipPhase();
+        skipTurn();
       }
     }
   }, 1000);
 }
 
-/** Updates the on-screen phase timer display (colour changes as time runs low). */
+/** Updates the on-screen Turn timer display (colour changes as time runs low). */
 function updateTimerDisplay() {
-  const el = document.getElementById('phase-timer');
+  const el = document.getElementById('Turn-timer');
   if (!el) return;
-  el.textContent = `⏱ ${_phaseTimeLeft}s`;
-  el.style.color = _phaseTimeLeft <= 5 ? 'var(--accent2)'
-    : _phaseTimeLeft <= 10 ? 'var(--medium)'
+  el.textContent = `⏱ ${_TurnTimeLeft}s`;
+  el.style.color = _TurnTimeLeft <= 5 ? 'var(--accent2)'
+    : _TurnTimeLeft <= 10 ? 'var(--medium)'
       : 'var(--muted)';
 }
 
@@ -476,7 +489,7 @@ function updateTimerDisplay() {
 /**
  * Executes the player's chosen card action (fire weapon or equip/use defense).
  * Validates all restrictions, applies damage/heal, updates ammo/durability,
- * handles Dual Wield's two-shot mechanic, then calls checkPhaseComplete.
+ * handles Dual Wield's two-shot mechanic, then calls checkTurnComplete.
  *
  * @param {{ type: string, subtype?: string, speed?: string, ammo?: number,
  *           healAmount?: number, defense?: number, durability?: number,
@@ -485,23 +498,23 @@ function updateTimerDisplay() {
 function playerPlayCard(card) {
   const isPairedCard = G.playerChar.attribute === 'dual_wield' && card.dualWieldPairId != null;
   const thisCardFired = isPairedCard && G.dualWieldFiredIds.has(card.id);
-  if (thisCardFired) { logMsg('system', 'That pistol already fired this phase.'); return; }
-  if (!isPairedCard && G.playerActedThisPhase) { logMsg('system', 'You already acted this phase.'); return; }
+  if (thisCardFired) { logMsg('system', 'That pistol already fired this Turn.'); return; }
+  if (!isPairedCard && G.playerActedThisTurn) { logMsg('system', 'You already acted this Turn.'); return; }
   if (G.gameOver) return;
   if (G.awaitingScrapChoice) { logMsg('system', 'You must choose a card to scrap first.'); return; }
 
-  const phase = PHASES[G.phase];
+  const Turn = TurnS[G.Turn];
 
   // ── Weapon ─────────────────────────────────────────────────────────────────
   if (card.type === 'weapon') {
-    const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
-    let allowedPhase = card.speed;
+    const Turn_ORDER = ['fast', 'medium', 'slow', 'charged'];
+    let allowedTurn = card.speed;
     if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
-      const idx = PHASE_ORDER.indexOf(card.speed);
-      if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
+      const idx = Turn_ORDER.indexOf(card.speed);
+      if (idx > 0) allowedTurn = Turn_ORDER[idx - 1];
     }
-    if (phase !== allowedPhase && phase !== card.speed) {
-      logMsg('system', `${card.name} is a ${card.speed} weapon — can only play in the ${card.speed} phase (or ${allowedPhase} with Deadeye).`); return;
+    if (Turn !== allowedTurn && Turn !== card.speed) {
+      logMsg('system', `${card.name} is a ${card.speed} weapon — can only play in the ${card.speed} Turn (or ${allowedTurn} with Deadeye).`); return;
     }
     // Subtype restrictions
     if (G.playerChar.attribute === 'dual_wield' && card.subtype !== 'pistol' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire pistols or revolvers — ${card.name} is locked.`); return; }
@@ -510,7 +523,7 @@ function playerPlayCard(card) {
     if (G.playerChar.attribute === 'revolver_specialist' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire revolvers — ${card.name} is locked.`); return; }
     if (G.playerChar.attribute === 'swift_melee' && card.subtype !== 'melee') { logMsg('system', `${G.playerChar.name} can only use melee weapons — ${card.name} is locked.`); return; }
     if (G.playerChar.attribute === 'rifle_specialist' && card.subtype !== 'assault_rifle' && card.subtype !== 'sniper') { logMsg('system', `${G.playerChar.name} uses rifles only — ${card.name} is locked.`); return; }
-    if (G.playerChar.attribute === 'run_and_gun' && !G.playerMovedThisPhase) { logMsg('system', `${G.playerChar.name} must move before attacking — Run AND Gun!`); return; }
+    if (G.playerChar.attribute === 'run_and_gun' && !G.playerMovedThisTurn) { logMsg('system', `${G.playerChar.name} must move before attacking — Run AND Gun!`); return; }
 
     const dist = getDistance(G.playerPos, G.botPos);
     if (card.subtype === 'melee' && dist !== 0) { logMsg('system', `${card.name} is melee — move adjacent (range 0) to use it.`); return; }
@@ -563,10 +576,10 @@ function playerPlayCard(card) {
       }
     }
 
-    G.playerActedThisPhase = true;
+    G.playerActedThisTurn = true;
     G.selectedCard = null;
     checkWin();
-    if (!G.gameOver) checkPhaseComplete();
+    if (!G.gameOver) checkTurnComplete();
     render();
 
     // ── Defense / Heal ──────────────────────────────────────────────────────────
@@ -600,9 +613,9 @@ function playerPlayCard(card) {
       logMsg('player', `You equip ${card.name} (${card.defense} def, ${card.durability} dur).`);
     }
 
-    G.playerActedThisPhase = true;
+    G.playerActedThisTurn = true;
     G.selectedCard = null;
-    checkPhaseComplete();
+    checkTurnComplete();
     render();
   }
 }
@@ -635,7 +648,7 @@ function toggleLog() {
 /**
  * Appends a message to the in-game log panel and the slim log bar.
  *
- * @param {'system'|'player'|'bot'|'phase'|'damage'|'heal'} type
+ * @param {'system'|'player'|'bot'|'Turn'|'damage'|'heal'} type
  * @param {string} text
  */
 function logMsg(type, text) {
