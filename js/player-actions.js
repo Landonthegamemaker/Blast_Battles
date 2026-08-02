@@ -24,38 +24,33 @@ function playerXray() {
   checkPhaseComplete();
 }
 
-function skipPhase() {
-  if (G.playerActedThisPhase) return;
+function skipTurn() {
+  if (G.playerActedThisTurn) return;
   // If awaiting scrap choice, dismiss it without discarding then continue the skip
   if (G.awaitingScrapChoice) {
     G.awaitingScrapChoice = false;
     logMsg('system', 'You pass on the Scrap Heap.');
   }
-  logMsg('player', 'You skip this phase.');
+  logMsg('player', 'You skip this turn.');
   G.awaitingMove = false;
-  G.playerActedThisPhase = true;
-  checkPhaseComplete();
+  G.playerActedThisTurn = true;
+  checkTurnComplete();
   render();
 }
 
-function checkPhaseComplete() {
-  if (G.playerActedThisPhase && G.botActedThisPhase) {
-    advancePhase();
+function checkTurnComplete() {
+  if (G.playerActedThisTurn && G.botActedThisTurn) {
+    advanceTurn();
     return;
   }
   // Player acted first — now bot takes its turn
-  if (G.playerActedThisPhase && !G.botActedThisPhase) {
-    const currentPhaseName = PHASES[G.phase]?.name?.toLowerCase();
-    const playerAutoSkipped = G.playerChar.attribute === 'explosive_specialist' && currentPhaseName === 'fast';
-    if (playerAutoSkipped) {
-      G.playerAutoSkippedPhase = true;
-      checkPhaseComplete();
+  if (G.playerActedThisTurn && !G.botActedThisTurn) {
       return;
     }
     setTimeout(() => {
       botMoveSmart();
       if (G.difficulty === 'impossible') {
-        impossibleBotPlayPhase(); G.botActedThisPhase = true; render(); checkWin(); if (!G.gameOver) advancePhase();
+        impossibleBotPlayPhase(); G.botActedThisTurn = true; render(); checkWin(); if (!G.gameOver) advanceTurn();
       } else {
         botPlayPhase();
         G.botActedThisPhase = true;
