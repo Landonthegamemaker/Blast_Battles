@@ -12,7 +12,6 @@
  *   startTurn()
  *   advanceTurn()
  *   checkTurnComplete()
- *   skipTurn()
  *   clearTurnTimer()
  *   startTurnTimer()
  *   updateTimerDisplay()
@@ -393,15 +392,6 @@ function checkTurnComplete() {
   }
 
   advanceTurn();
-}
-
-function skipTurn() {
-  if (G.gameOver) return;
-  G.playerActedThisTurn = true;
-  G.awaitingMove = false;
-  G.awaitingScrapChoice = false;
-  render();
-  checkTurnComplete();
 }
 
 // ── Turn timer ───────────────────────────────────────────────────────────────
