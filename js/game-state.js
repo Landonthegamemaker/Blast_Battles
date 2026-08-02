@@ -40,9 +40,6 @@ let _selectedCharId = null;
 
 /** Turn timer state */
 let TURN_DURATION= 15;
-const ACTION_ENERGY_COST = {1, 1, 2, 2, 3, 4, 5, 6, 7};
-let K_DRAIN = 1;
-let K_RECOVER = 1;
 let _turnTimerInterval = null;
 let _turnTimeLeft = 15;
 let _autoCheckTimeout = null;
@@ -177,14 +174,9 @@ function initGame() {
   // Reset G — player starts top-left (0), bot starts bottom-right (48)
   G = {
     turn: 1,
-    playerEnergy: 0,
-    botEnergy: 0,
-    playerStamina: 100,
-    botStamina: 100,
-    playerLockedOut: false,
-    botLockedOut: false,
-    playerSpentThisTurn: 0,
-    botSpentThisTurn: 0,
+    playerResource: createResourceState(),
+    botResource: createResourceState(),
+    
     difficulty: G.difficulty || 'medium',
     playerChar: deepClone(playerChar),
     botChar: deepClone(botChar),
