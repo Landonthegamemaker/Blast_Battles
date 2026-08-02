@@ -164,16 +164,20 @@ function initGame() {
   const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
   const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
 
-  // 7×7 grid — center tile always neutral
-  const locs = shuffle(deepClone(LOCATION_POOL)).slice(0, 49);
-  locs[24] = deepClone({
-    id: 'lCenter', name: 'Central Ground', effect: 'neutral',
-    effectDesc: 'No special effect', icon: '⬜', css: 'neutral'
-  });
+  // 7×7 grid
+  const locs = shuffle(deepClone(LOCATION_POOL)).slice(1, 48);
+    locs[0] = deepClone({
+      id: 'lP1', name: '', effect: 'neutral',
+      effectDesc: '', icon: '⬜', css: 'neutral'
+    });
+    locs[49] = deepClone({
+      id: 'lP2', name: '', effect: 'neutral',
+      effectDesc: '', icon: '⬜', css: 'neutral'
+    });
 
   // Reset G — player starts top-left (0), bot starts bottom-right (48)
   G = {
-    turn: 1,
+    Turn: 0,
     playerResource: createResourceState(),
     botResource: createResourceState(),
     
@@ -224,16 +228,36 @@ function initGame() {
   startTurn();
 }
 
-// ── Turn management ──────────────────────────────────────────────────────────
+// ── Energy & Stamina — game-specific layer on top of energy-engine.js ─────────
+// All core resource math (income, spend, drain, recovery, lockout) lives in
+// energy-engine.js and is called directly below — nothing here duplicates it.
+// This section only adds character-specific rules the generic engine shouldn't know about.
 
-/**
- * Starts the current Turn (G.Turn / G.turn are already set).
- * - Resets per-Turn flags
- * - Applies location effects
- * - Determines who acts first (by speed)
- * - Launches the bot if it goes first
- * - Starts the auto-skip timer
- */
+/** Per-character movement cost — most characters move for 1, a few pay a surcharge. */
+function getMoveCost(char) {
+  if (char.attribute === 'heavy_armor') return 3;         // Iron Titan
+  if (char.attribute === 'shotgun_specialist') return 2;   // Sentinel Sam
+  if (char.attribute === 'explosive_specialist') return 2; // Hank the Tank
+  return 1;
+}
+
+/** Cost of a weapon subtype (or 'move'/'melee'). Cowboy Carl (deadeye) fires revolvers for 1 instead of 2. */
+function getWeaponCost(subtypeOrAction, char) {
+  const base = getActionCost(subtypeOrAction); // from energy-engine.js
+  if (char && char.attribute === 'deadeye' && subtypeOrAction === 'revolver') return base - 1;
+  return base;
+}
+
+function resourceFor(side) {
+  return side === 'player' ? G.playerResource : G.botResource;
+}
+
+/** Can this side afford a given cost right now? */
+function canAffordAction(side, cost) {
+  return canAfford(resourceFor(side).energy, cost); // canAfford from energy-engine.js
+}
+
+// ── Turn management ──────────────────────────────────────────────────────────
 function startTurn() {
   G.playerActedThisTurn = false;
   G.botActedThisTurn = false;
@@ -245,50 +269,25 @@ function startTurn() {
   G.dualWieldFiredIds = new Set();
   clearTurnTimer();
 
-  const Turn = TurnS[G.Turn];
-  logMsg('Turn', `— ${Turn.toUpperCase()} Turn — (move OR play a card)`);
+  beginTurn(G.playerResource, G.turn, G.playerChar.speed); // energy-engine.js
+  beginTurn(G.botResource, G.turn, G.botChar.speed);
+  logMsg('phase', `— TURN ${G.turn} — (move OR play a card)`);
+  if (G.playerResource.lockedOut) logMsg('system', `💤 ${G.playerChar.name} is locked out this turn (Stamina: ${G.playerResource.stamina}/${getLockoutClearThreshold(G.playerChar.speed)} needed).`);
+  if (G.botResource.lockedOut) logMsg('system', `💤 ${G.botChar.name} is locked out this turn (Stamina: ${G.botResource.stamina}/${getLockoutClearThreshold(G.botChar.speed)} needed).`);
 
-  // Location effects — damage/heal every Turn; card draws on medium/charged
-  const isFirstTurn = G.turn === 1 && G.Turn === 0;
-  const isCardDrawTurn = Turn === 'medium' || Turn === 'charged';
-  if (!isFirstTurn) applyLocationEffects(isCardDrawTurn);
+  const isFirstTurn = G.turn === 1;
+  if (!isFirstTurn) applyLocationEffects(true);
   checkWin();
   if (G.gameOver) return;
 
-  // ── Movement gating by character attribute ─────────────────────────────────
-  const isTitanPlayer = G.playerChar.attribute === 'heavy_armor';        // Charged only
-  const isSamPlayer = G.playerChar.attribute === 'shotgun_specialist'; // Slow & Charged
-  const isHuntressPlayer = G.playerChar.attribute === 'sniper_specialist';  // Fast & Medium
-  const isTankPlayer = G.playerChar.attribute === 'explosive_specialist'; // Not Fast
-
-  const heavyMoveOk = !isTitanPlayer || Turn === 'charged';
-  const samMoveOk = !isSamPlayer || Turn === 'slow' || Turn === 'charged';
-  const huntressMoveOk = !isHuntressPlayer || Turn === 'fast' || Turn === 'medium';
-  const tankMoveOk = !isTankPlayer || Turn !== 'fast';
-
-  if (!heavyMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name}'s heavy armor restricts movement to Charged Turn only.`);
-  } else if (!samMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `⚙️ ${G.playerChar.name} can only move during Slow & Charged Turns.`);
-  } else if (!huntressMoveOk) {
-    G.awaitingMove = false;
-    logMsg('system', `🎯 ${G.playerChar.name} holds position — can only move on Fast & Medium Turns.`);
-  } else if (!tankMoveOk) {
-    // Hank the Tank — fully locked during Fast Turn
+  if (G.playerResource.lockedOut) {
     G.awaitingMove = false;
     G.playerActedThisTurn = true;
-    G.botActedThisTurn = true;
-    G.playerAutoSkippedTurn = true;
-    logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast Turn. Holding position...`);
-    setTimeout(() => checkTurnComplete(), 2000);
   } else {
-    G.awaitingMove = true;
+    G.awaitingMove = canAffordAction('player', getMoveCost(G.playerChar));
+    if (!G.awaitingMove) logMsg('system', `⚡ ${G.playerChar.name} doesn't have enough Energy to move this turn.`);
   }
 
-  // ── Speed-based turn order ─────────────────────────────────────────────────
-  // The Shadow always follows — never acts before the bot
   const isShadowPlayer = G.playerChar.name.startsWith('Dark ') || G.playerChar.name === 'The Shadow';
   const effPlayerSpd = getEffectiveSpeed(G.playerChar, G.playerHand, G.playerInPlay);
   const effBotSpd = getEffectiveSpeed(G.botChar, G.botHand, G.botInPlay);
@@ -297,17 +296,24 @@ function startTurn() {
       : effBotSpd > effPlayerSpd ? false
         : Math.random() < 0.5;
 
-  if (!playerFirst) {
+  if (!playerFirst || G.playerResource.lockedOut) {
     setTimeout(() => {
-      if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayTurn(); G.botActedThisTurn = true;
+      if (G.botResource.lockedOut) {
+        G.botActedThisTurn = true;
+        logMsg('system', `💤 ${G.botChar.name} is locked out and cannot act this turn.`);
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); }
+        if (!G.gameOver) { render(); updateHint(); checkTurnComplete(); }
+        return;
+      }
+      if (G.difficulty === 'impossible') {
+        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisTurn = true;
+        render(); checkWin();
+        if (!G.gameOver) { render(); updateHint(); if (G.playerResource.lockedOut) checkTurnComplete(); }
       } else {
-        botMoveSmart(); botPlayTurn();
+        botMoveSmart(); botPlayPhase();
         G.botActedThisTurn = true;
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); }
+        if (!G.gameOver) { render(); updateHint(); if (G.playerResource.lockedOut) checkTurnComplete(); }
       }
     }, 500);
   } else {
@@ -319,44 +325,65 @@ function startTurn() {
 }
 
 /**
- * Advances to the next Turn (or next turn).
- * Applies Sprinting Sue's extra Fast-Turn move if applicable.
- * Resets per-Turn flags and calls startTurn().
+ * Advances to the next turn. Calls energy-engine.js's endTurn() for both sides
+ * (Stamina drain/recovery settlement) before applying end-of-turn effects.
  */
 function advanceTurn() {
-  G.Turn++;
-  if (G.Turn >= TurnS.length) {
-    G.Turn = 0;
-    G.turn++;
-    logMsg('system', `=== Turn ${G.turn} ===`);
-  }
-  // Sprinting Sue: on Fast Turn she may move an extra space
-  if (G.Turn === 0 && G.playerChar.attribute === 'swift') {
-    G.playerMovedThisTurn = false; // fresh flag for the bonus move
-  }
-  startTurn();
+  endTurn(G.playerResource, G.playerChar.speed); // energy-engine.js
+  endTurn(G.botResource, G.botChar.speed);
+  if (G.playerResource.lockedOut) logMsg('system', `💤 ${G.playerChar.name} is exhausted — locked out until Stamina recovers!`);
+  if (G.botResource.lockedOut) logMsg('system', `💤 ${G.botChar.name} is exhausted — locked out until Stamina recovers!`);
+
+  G.turn++;
+  logMsg('system', `=== Turn ${G.turn} ===`);
+
+  const checkToxicPenalty = (char, pos, isPlayer) => {
+    if (char.attribute !== 'radioactive_resist') return;
+    const loc = G.locations[pos];
+    if (loc.effect === 'radiation') {
+      if (isPlayer) G.playerToxicTurns = 0; else G.botToxicTurns = 0;
+    } else {
+      if (isPlayer) G.playerToxicTurns++; else G.botToxicTurns++;
+      const turns = isPlayer ? G.playerToxicTurns : G.botToxicTurns;
+      const penalty = turns * 2;
+      char.hp = Math.max(0, char.hp - penalty);
+      logMsg('damage', `☠️ ${char.name} off hazard tile for ${turns} turn(s) — loses ${penalty} HP!`);
+    }
+  };
+  checkToxicPenalty(G.playerChar, G.playerPos, true);
+  checkToxicPenalty(G.botChar, G.botPos, false);
+
+  if (G.turn === MAX_TURNS - 5) logMsg('system', `⚠️ ${MAX_TURNS - G.turn} turns remaining — tiebreaker: HP% × (DMG dealt + Healing done). Outscore your opponent!`);
+  if (G.turn === MAX_TURNS - 2) logMsg('system', `⚠️ FINAL 3 TURNS — scores: You ${((G.playerChar.hp / G.playerChar.maxHp) * (G.playerDmgDealt + G.playerHealTotal)).toFixed(0)} vs Bot ${((G.botChar.hp / G.botChar.maxHp) * (G.botDmgDealt + G.botHealTotal)).toFixed(0)} — deal damage AND stay healthy!`);
+
+  if (G.gameOver) return;
+  setTimeout(() => { startTurn(); render(); }, 200);
 }
 
 /**
  * Checks whether both sides have finished their actions.
  * If the bot hasn't acted yet, triggers its turn now (it goes second).
- * Once both have acted, advances the Turn.
- *
- * Bot acting after the player is the "player-first" flow; the bot acting
- * before the player is handled inside startTurn().
+ * Once both have acted, advances the turn.
  */
+
 function checkTurnComplete() {
   if (G.gameOver) return;
 
-  // If the bot hasn't acted yet, trigger its turn now
   if (!G.botActedThisTurn) {
+    if (G.botResource.lockedOut) {
+      G.botActedThisTurn = true;
+      logMsg('system', `💤 ${G.botChar.name} is locked out and cannot act this turn.`);
+      render(); checkWin();
+      if (!G.gameOver) { render(); updateHint(); advanceTurn(); }
+      return;
+    }
     setTimeout(() => {
       if (G.difficulty === 'impossible') {
-        botMoveSmart(); impossibleBotPlayTurn(); G.botActedThisTurn = true;
+        botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisTurn = true;
         render(); checkWin();
         if (!G.gameOver) { render(); updateHint(); advanceTurn(); }
       } else {
-        botMoveSmart(); botPlayTurn();
+        botMoveSmart(); botPlayPhase();
         G.botActedThisTurn = true;
         render(); checkWin();
         if (!G.gameOver) { render(); updateHint(); advanceTurn(); }
@@ -365,15 +392,9 @@ function checkTurnComplete() {
     return;
   }
 
-  // Both acted — move forward
   advanceTurn();
 }
 
-/**
- * Skips the player's action for the current Turn (called by the timer
- * or when the player clicks END TURN without acting).
- * Marks the player as having acted, then calls checkTurnComplete.
- */
 function skipTurn() {
   if (G.gameOver) return;
   G.playerActedThisTurn = true;
@@ -384,7 +405,6 @@ function skipTurn() {
 }
 
 // ── Turn timer ───────────────────────────────────────────────────────────────
-
 /** Stops any running Turn timer intervals/timeouts. */
 function clearTurnTimer() {
   if (_TurnTimerInterval) { clearInterval(_TurnTimerInterval); _TurnTimerInterval = null; }
