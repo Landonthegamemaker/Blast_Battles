@@ -59,11 +59,10 @@ async function startWithDifficulty(diff) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-
 /**
- * Resets all game state and starts a new match.
- * Called on first load (after char select) and on rematch.
- */
+* Resets all game state and starts a new match.
+* Called on first load (after char select) and on rematch.
+*/
 function initGame() {
   document.getElementById('modal-overlay').classList.add('hidden');
 
@@ -324,9 +323,9 @@ function startTurn() {
 }
 
 /**
- * Advances to the next turn. Calls energy-engine.js's endTurn() for both sides
- * (Stamina drain/recovery settlement) before applying end-of-turn effects.
- */
+* Advances to the next turn. Calls energy-engine.js's endTurn() for both sides
+* (Stamina drain/recovery settlement) before applying end-of-turn effects.
+*/
 function advanceTurn() {
   endTurn(G.playerResource, G.playerChar.speed); // energy-engine.js
   endTurn(G.botResource, G.botChar.speed);
@@ -360,10 +359,10 @@ function advanceTurn() {
 }
 
 /**
- * Checks whether both sides have finished their actions.
- * If the bot hasn't acted yet, triggers its turn now (it goes second).
- * Once both have acted, advances the turn.
- */
+* Checks whether both sides have finished their actions.
+* If the bot hasn't acted yet, triggers its turn now (it goes second).
+* Once both have acted, advances the turn.
+*/
 
 function checkTurnComplete() {
   if (G.gameOver) return;
@@ -409,9 +408,9 @@ function getTurnSpeed() {
 }
 
 /**
- * Updates the Turn-speed slider label and fill gradient.
- * @param {number} val - Speed multiplier (1–5)
- */
+* Updates the Turn-speed slider label and fill gradient.
+* @param {number} val - Speed multiplier (1–5)
+*/
 function updateTurnSpeed(val) {
   const label = document.getElementById('Turn-speed-label');
   if (label) label.textContent = `${val}x`;
@@ -433,15 +432,15 @@ function hasAnyPlayableCard() {
 }
 
 /**
- * Starts the countdown timer for the current Turn.
- * At speed 1: 15 s.  At speed 5: 3 s.  Timer always reaches 0.
- *
- * Auto-skip behaviour at 0:
- *   • Player already acted → checkTurnComplete
- *   • Pete fired first shot only → log miss, mark acted, checkTurnComplete
- *   • speed > 1 and no playable cards → log wait, skipTurn
- *   • otherwise → log "Time up!", skipTurn
- */
+* Starts the countdown timer for the current Turn.
+* At speed 1: 15 s.  At speed 5: 3 s.  Timer always reaches 0.
+*
+* Auto-skip behaviour at 0:
+*   • Player already acted → checkTurnComplete
+*   • Pete fired first shot only → log miss, mark acted, checkTurnComplete
+*   • speed > 1 and no playable cards → log wait, skipTurn
+*   • otherwise → log "Time up!", skipTurn
+*/
 function startTurnTimer() {
   const speed = getTurnSpeed();
   const totalSecs = Math.ceil(15 / speed);
@@ -489,14 +488,14 @@ function updateTimerDisplay() {
 // ── Card play (player) ────────────────────────────────────────────────────────
 
 /**
- * Executes the player's chosen card action (fire weapon or equip/use defense).
- * Validates all restrictions, applies damage/heal, updates ammo/durability,
- * handles Dual Wield's two-shot mechanic, then calls checkTurnComplete.
- *
- * @param {{ type: string, subtype?: string, speed?: string, ammo?: number,
- *           healAmount?: number, defense?: number, durability?: number,
- *           dualWieldPairId?: string, range?: number }} card
- */
+* Executes the player's chosen card action (fire weapon or equip/use defense).
+* Validates all restrictions, applies damage/heal, updates ammo/durability,
+* handles Dual Wield's two-shot mechanic, then calls checkTurnComplete.
+*
+* @param {{ type: string, subtype?: string, speed?: string, ammo?: number,
+*           healAmount?: number, defense?: number, durability?: number,
+*           dualWieldPairId?: string, range?: number }} card
+*/
 function playerPlayCard(card) {
   const isPairedCard = G.playerChar.attribute === 'dual_wield' && card.dualWieldPairId != null;
   const thisCardFired = isPairedCard && G.dualWieldFiredIds.has(card.id);
@@ -584,7 +583,7 @@ function playerPlayCard(card) {
     if (!G.gameOver) checkTurnComplete();
     render();
 
-    // ── Defense / Heal ──────────────────────────────────────────────────────────
+  // ── Defense / Heal ──────────────────────────────────────────────────────────
   } else if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') { logMsg('system', `Tracy Guns carries only weapons — defense cards are locked.`); return; }
     if (G.playerChar.attribute === 'dual_wield') { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
@@ -606,7 +605,7 @@ function playerPlayCard(card) {
       G.playerHand = G.playerHand.filter(c => c.id !== card.id);
       G.playerInPlay = G.playerInPlay.filter(c => c.id !== card.id);
     } else {
-      // Armor equip
+    // Armor equip
       if (G.playerInPlay.find(c => c.id === card.id)) { logMsg('system', `${card.name} is already equipped.`); return; }
       const equippedDefense = G.playerInPlay.filter(c => c.type === 'defense' && c.healAmount === 0).length;
       if (equippedDefense >= 2) { logMsg('system', `You can only have 2 defensive items equipped at a time. Unequip one first.`); return; }
@@ -623,9 +622,9 @@ function playerPlayCard(card) {
 }
 
 /**
- * Plays whichever card is currently selected (G.selectedCard).
- * Called by the FIRE / EQUIP / USE button overlay.
- */
+* Plays whichever card is currently selected (G.selectedCard).
+* Called by the FIRE / EQUIP / USE button overlay.
+*/
 function playerPlaySelectedCard() {
   if (!G.selectedCard) return;
   const card = G.playerHand.find(c => c.id === G.selectedCard)
