@@ -126,10 +126,18 @@ function canAct(state) {
   return !state.lockedOut;
 }
 
-if (typeof module !== 'undefined') {
+if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ACTION_ENERGY_COST, K_DRAIN, K_RECOVER,
     getEnergyIncome, getLockoutClearThreshold, getActionCost, canAfford, createResourceState,
     beginTurn, trySpend, endTurn, canAct,
   };
+} else if (typeof window !== 'undefined') {
+  window.createResourceState = createResourceState;
+  window.beginTurn = beginTurn;
+  window.trySpend = trySpend;
+  window.endTurn = endTurn;
+  window.canAct = canAct;
+  window.canAfford = canAfford;
+  window.getActionCost = getActionCost;
 }
