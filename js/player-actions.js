@@ -57,8 +57,7 @@ function checkTurnComplete() {
         render(); checkWin();
         if (!G.gameOver) advancePhase();
       }
-    }, 500);
-  }
+   }, 500);
 }
 
 function advancePhase() {
