@@ -213,6 +213,7 @@ function initGame() {
   };
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
+  console.log('Player data:', G.playerChar, 'Bot data:', G.botChar);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
   logMsg('system', `You start at ${G.locations[G.playerPos].name} (top-left). Bot starts at ${G.locations[G.botPos].name} (bottom-right).`);
   if (G.botChar.name.startsWith('Dark ')) {
