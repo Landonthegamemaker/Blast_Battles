@@ -3,10 +3,15 @@
  * No dependencies. Safe to import first.
  *
  * Exports (browser globals when loaded via <script>):
+ *   SPEED_ORDER, PHASES,
  *   WEAPON_POOL, DEFENSE_POOL, CHARACTER_POOL, LOCATION_POOL
  */
 
 'use strict';
+
+// ── Phase ordering ──────────────────────────────────────────────────────────
+const SPEED_ORDER = ['fast', 'medium', 'slow', 'charged'];
+const PHASES = ['fast', 'medium', 'slow', 'charged'];
 
 // ── Weapon cards (30) ───────────────────────────────────────────────────────
 const WEAPON_POOL = [
