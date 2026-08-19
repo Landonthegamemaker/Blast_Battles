@@ -322,20 +322,6 @@
       const swiftSteps = isSwift ? (PHASES[G.phase] === 'fast' ? 2 : 1) : 1;
       const reachable = G.awaitingMove ? getReachableForChar(G.playerChar, G.playerPos, swiftSteps) : [];
 
-      // Live weapon-range preview — if the player has a weapon card selected, tiles within
-      // its range from the player's current position get a green outline, and the bot's
-      // occupied tile is flagged valid/invalid to explain why FIRE is (or isn't) available.
-      const selCard = (!G.awaitingScrapChoice && G.selectedCard && !G.gameOver && !G.playerActedThisPhase)
-        ? (G.playerHand.find(c => c.id === G.selectedCard) || G.playerInPlay.find(c => c.id === G.selectedCard))
-        : null;
-      const showRangePreview = !!(selCard && selCard.type === 'weapon');
-      const previewRange = showRangePreview ? (selCard.subtype === 'melee' ? 0 : selCard.range) : -1;
-
-      // Per-token HP bars
-      const pPct = Math.max(0, (G.playerChar.hp / G.playerChar.maxHp) * 100);
-      const bPct = Math.max(0, (G.botChar.hp / G.botChar.maxHp) * 100);
-      const tokenHpBar = pct => `<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%"></div></div>`;
-
       // 7x7 grid: 7 rows × 7 cols = 49 tiles
       for (let r = 0; r < 7; r++) {
         const rowDiv = document.createElement('div');
@@ -355,19 +341,10 @@
 
           const dist = getDistance(G.playerPos, idx);
 
-          if (showRangePreview) {
-            const inRange = dist <= previewRange;
-            if (bHere) {
-              tile.classList.add(inRange ? 'weapon-target-valid' : 'weapon-target-invalid');
-            } else if (inRange) {
-              tile.classList.add('in-weapon-range');
-            }
-          }
-
           tile.innerHTML = `
         <div class="loc-icons">
-          ${pHere ? `<div class="token-stack">${tokenHpBar(pPct)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
-          ${bHere ? `<div class="token-stack">${tokenHpBar(bPct)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
+          ${pHere ? `<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div>` : ''}
+          ${bHere ? `<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div>` : ''}
         </div>
         <div class="loc-name">${loc.icon} ${loc.name}</div>
         <div class="loc-effect ${loc.css}">${loc.effectDesc}</div>
