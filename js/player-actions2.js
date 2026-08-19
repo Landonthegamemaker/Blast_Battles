@@ -116,7 +116,6 @@ function playerMove(locIndex) {
     logMsg('player', `You move to ${G.locations[locIndex].name}.`);
     G.playerPos = locIndex;
     G.playerMovedThisPhase = true;
-    revealTilesAround(G.playerPos);
     BB_Audio.stopSfx();
     BB_Audio.playZoneSfx(G.locations[locIndex].effect);
   } else {

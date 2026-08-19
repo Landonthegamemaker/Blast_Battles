@@ -694,6 +694,22 @@
       font-family: 'Share Tech Mono', 'Courier New', monospace;
     }
 
+    .hp-bar {
+      height: 5px;
+      background: var(--surface);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-top: 2px;
+    }
+
+    .hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
+      transition: width 0.4s;
+      border-radius: 4px;
+    }
+
     .char-stats {
       display: flex;
       gap: 4px;
@@ -1115,6 +1131,12 @@
       box-shadow: 0 0 12px rgba(232, 184, 75, 0.4);
     }
 
+    .location-tile.selectable {
+      border-color: var(--green);
+      animation: pulse-green 1s infinite;
+      cursor: pointer;
+    }
+
     .location-tile.not-reachable {
       border-color: var(--accent2);
       background: rgba(255, 68, 68, 0.06);
@@ -1124,32 +1146,6 @@
     .location-tile.empty-slot {
       opacity: 0;
       pointer-events: none;
-    }
-
-    /* ── Fog of war: tile identity not yet seen ── */
-    .location-tile.fogged {
-      background: var(--surface);
-    }
-
-    .location-tile.fogged .loc-name {
-      color: var(--muted);
-    }
-
-    /* ── Live weapon-range preview (shown when a weapon card is selected) ── */
-    .location-tile.in-weapon-range {
-      outline: 2px solid rgba(68, 255, 136, 0.45);
-      outline-offset: -2px;
-    }
-
-    .location-tile.weapon-target-valid {
-      outline: 3px solid var(--green);
-      outline-offset: -3px;
-      animation: pulse-green 1s infinite;
-    }
-
-    .location-tile.weapon-target-invalid {
-      outline: 3px solid var(--accent2);
-      outline-offset: -3px;
     }
 
     @keyframes pulse-green {
@@ -1206,80 +1202,6 @@
       justify-content: center;
       gap: 3px;
       pointer-events: none;
-    }
-
-    /* ── Token HP bars (above tokens on arena tiles) ── */
-    .token-stack {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      pointer-events: none;
-    }
-
-    .token-hp-bar {
-      width: 22px;
-      height: 4px;
-      background: var(--surface);
-      border-radius: 3px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-
-    .token-hp-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
-      transition: width 0.4s;
-    }
-
-    /* ── Shield sub-bar (segmented by armor durability, stacked under HP) ── */
-    .token-shield-bar {
-      display: flex;
-      align-items: center;
-      gap: 1px;
-      margin-top: 1px;
-    }
-
-    .shield-segment {
-      width: 3px;
-      height: 4px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 1px;
-    }
-
-    .shield-segment.filled {
-      background: var(--hero);
-      border-color: var(--hero);
-      box-shadow: 0 0 3px var(--hero);
-    }
-
-    .shield-label {
-      font-size: 0.42rem;
-      line-height: 1;
-      color: var(--hero);
-      font-family: 'Share Tech Mono', 'Courier New', monospace;
-      margin-left: 2px;
-    }
-
-    @media (max-width: 700px) {
-      .token-hp-bar {
-        width: 16px;
-        height: 3px;
-      }
-
-      .token-stack {
-        gap: 1px;
-      }
-
-      .shield-segment {
-        width: 2px;
-        height: 3px;
-      }
-
-      .shield-label {
-        font-size: 0.36rem;
-      }
     }
 
     .player-token {
