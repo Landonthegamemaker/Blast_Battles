@@ -29,7 +29,7 @@ const BB_Audio = (() => {
         char_sentinel_sam: { src: './audio/music/Pat - Shotgun [NCS Release].mp3', loop: false },
         char_sprinting_sue: { src: './audio/music/Tom Wilson - Run For Your Life  [NCS Release].mp3', loop: false },
         char_tracy_guns: { src: "./audio/music/HXI - Lock n' Load [NCS Release].mp3", loop: false },
-        char_cowboy_carl: { src: './audio/music/roybushband-dark-western-149423.mp3', loop: false },
+        char_cowboy_clint: { src: './audio/music/roybushband-dark-western-149423.mp3', loop: false },
         char_hank: { src: './audio/music/Thor_s_Hammer_-_Ethan_Meixsell.mp3', loop: false },
         char_huntress: { src: './audio/music/RAIZHELL, CLOUD ZERO - KILL ZONE [NCS Release].mp3', loop: false },
         char_iron_titan: { src: './audio/music/NIVIRO - The Riot [NCS Release].mp3', loop: false },
@@ -64,7 +64,7 @@ const BB_Audio = (() => {
         c10: 'char_sentinel_sam',  // Sentinel Sam
         c6: 'char_sprinting_sue', // Sprinting Sue
         c11: 'char_tracy_guns',    // Tracy Guns
-        c9: 'char_cowboy_carl',   // Cowboy Carl
+        c9: 'char_cowboy_clint',   // Cowboy Clint
         c15: 'char_hank',          // Hank the Tank
         c12: 'char_huntress',      // Huntress Hellena
         c2: 'char_iron_titan',    // Iron Titan
