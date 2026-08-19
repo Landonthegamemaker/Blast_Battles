@@ -277,7 +277,7 @@ function startPhase() {
     G.botActedThisPhase = true;
     G.playerAutoSkippedPhase = true;
     logMsg('system', `💣 ${G.playerChar.name} is too slow to act during the Fast phase. Holding position...`);
-    setTimeout(() => checkPhaseComplete(), 400);
+    setTimeout(() => checkPhaseComplete(), 2000);
   } else {
     G.awaitingMove = true;
   }
@@ -297,46 +297,20 @@ function startPhase() {
       if (G.difficulty === 'impossible') {
         botMoveSmart(); impossibleBotPlayPhase(); G.botActedThisPhase = true;
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); checkForDeadTurn(); }
+        if (!G.gameOver) { render(); updateHint(); }
       } else {
         botMoveSmart(); botPlayPhase();
         G.botActedThisPhase = true;
         render(); checkWin();
-        if (!G.gameOver) { render(); updateHint(); checkForDeadTurn(); }
+        if (!G.gameOver) { render(); updateHint(); }
       }
     }, 500);
-    startPhaseTimer();
   } else {
     render();
     updateHint();
-    // If the player has literally no legal action this phase (movement locked AND
-    // no playable card), skip instantly instead of burning the full phase timer.
-    if (!checkForDeadTurn()) startPhaseTimer();
   }
-}
 
-/**
- * Detects a "dead turn" — the player has no legal action available this phase
- * (movement is locked by their attribute AND no card in hand/in-play is playable).
- * If so, auto-skips immediately with a log message instead of waiting on the timer.
- * Distance/position can change if the bot moves first, so this is checked both
- * right after startPhase() sets up movement gating and again after the bot acts.
- *
- * @returns {boolean} true if a dead turn was detected and auto-skipped
- */
-function checkForDeadTurn() {
-  if (G.gameOver) return false;
-  if (G.playerActedThisPhase) return false;
-  if (G.awaitingScrapChoice) return false;
-  if (G.awaitingMove) return false;
-  if (hasAnyPlayableCard()) return false;
-
-  clearPhaseTimer();
-  logMsg('system', `${G.playerChar.name} has no playable action this phase — auto-skipping.`);
-  G.playerActedThisPhase = true;
-  render();
-  checkPhaseComplete();
-  return true;
+  startPhaseTimer();
 }
 
 /**
