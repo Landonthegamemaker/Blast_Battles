@@ -569,7 +569,7 @@ function isCardPlayable(card) {
 
   if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') return false; // Tracy Guns: weapons only
-    if (G.playerChar.attribute === 'dual_wield')  return false; // Pete: weapons only
+    if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) return false; // Pete: no armor, healing OK
     if (card.healAmount > 0) {
       return G.playerChar.hp < G.playerChar.maxHp &&
              G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;

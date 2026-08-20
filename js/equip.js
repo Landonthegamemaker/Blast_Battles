@@ -74,11 +74,22 @@ function openSlotPicker(slot) {
   const isArmorSlot = ARMOR_SLOTS.includes(slot);
   const char = _currentPlayerChar();
   const allowedWeaponSubtypes = (isHandSlot && char) ? getAllowedWeaponSubtypes(char.attribute) : null;
-  // Pete (dual_wield) & Tracy (extra_carry) can never play a defense card in-match
-  // (see game-state.js/combat.js playerPlayCard — "weapons only") — don't let them
-  // equip one into a hand slot only to find it's permanently dead weight.
-  const noDefenseCards = isHandSlot && char && (char.attribute === 'dual_wield' || char.attribute === 'extra_carry');
   const armorCapReached = isArmorSlot && !PlayerLoadout[slot] && _armorSlotsFilledCount(slot) >= 2;
+
+  // A defense-type item this character can never actually play in-match:
+  //   Tracy (extra_carry) — weapons only, no exceptions (documented on her card).
+  //   Pete (dual_wield)   — both hands full of pistols, so armor is locked, but
+  //                         healing items don't need a free hand and are still fine.
+  // Applies to every slot, not just hand — all 6 body slots are armor (defense>0,
+  // no heal), so this naturally locks Tracy/Pete out of the whole paperdoll except
+  // their 2 hand slots (and, for Pete, healing items specifically within those).
+  const isDefenseItemBlocked = item => {
+    if (item.type !== 'defense') return false;
+    if (!char) return false;
+    if (char.attribute === 'extra_carry') return true;
+    if (char.attribute === 'dual_wield' && item.healAmount === 0) return true;
+    return false;
+  };
 
   const owned = ALL_EQUIPPABLE.filter(i => i.slot === poolSlot && isOwned(i.id));
   const emptyEl = document.getElementById('equip-picker-empty');
@@ -110,7 +121,7 @@ function openSlotPicker(slot) {
 
   for (const item of owned) {
     const weaponBlocked = isHandSlot && item.type === 'weapon' && allowedWeaponSubtypes && !allowedWeaponSubtypes.includes(item.subtype);
-    const defenseBlocked = isHandSlot && item.type === 'defense' && noDefenseCards;
+    const defenseBlocked = isDefenseItemBlocked(item);
     const armorBlocked = armorCapReached && item.id !== PlayerLoadout[slot];
     const locked = weaponBlocked || defenseBlocked || armorBlocked;
 
@@ -118,7 +129,7 @@ function openSlotPicker(slot) {
     row.className = 'equip-pick-row' + (PlayerLoadout[slot] === item.id ? ' selected' : '') + (locked ? ' locked' : '');
     const lockNote = weaponBlocked
       ? `🔒 ${char.name} can't use this`
-      : defenseBlocked ? `🔒 ${char.name} carries weapons only`
+      : defenseBlocked ? (char.attribute === 'dual_wield' ? `🔒 Pete's hands are full` : `🔒 ${char.name} carries weapons only`)
       : armorBlocked ? '🔒 2 armor max' : '';
     row.innerHTML = `<span class="epr-icon">${item.icon}</span><span class="epr-name">${item.name}</span><span class="epr-stat">${lockNote || _slotShortStat(item)}</span>`;
     if (!locked) row.onclick = () => _pickSlotItem(slot, item.id);

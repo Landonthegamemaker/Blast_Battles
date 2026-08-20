@@ -644,7 +644,9 @@ function playerPlayCard(card) {
     // ── Defense / Heal ──────────────────────────────────────────────────────────
   } else if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') { logMsg('system', `Tracy Guns carries only weapons — defense cards are locked.`); return; }
-    if (G.playerChar.attribute === 'dual_wield') { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
+    // Pete (dual_wield): both hands are full of pistols, so armor is locked — but a
+    // med kit doesn't need a free hand, so healing items are allowed.
+    if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) { logMsg('system', `Pistol Pete's hands are full — armor is locked (healing items are still OK).`); return; }
 
     if (card.healAmount > 0) {
       // Healing item

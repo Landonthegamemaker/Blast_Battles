@@ -694,22 +694,6 @@
       font-family: 'Share Tech Mono', 'Courier New', monospace;
     }
 
-    .hp-bar {
-      height: 5px;
-      background: var(--surface);
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      margin-top: 2px;
-    }
-
-    .hp-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
-      transition: width 0.4s;
-      border-radius: 4px;
-    }
-
     .char-stats {
       display: flex;
       gap: 4px;
@@ -1131,12 +1115,6 @@
       box-shadow: 0 0 12px rgba(232, 184, 75, 0.4);
     }
 
-    .location-tile.selectable {
-      border-color: var(--green);
-      animation: pulse-green 1s infinite;
-      cursor: pointer;
-    }
-
     .location-tile.not-reachable {
       border-color: var(--accent2);
       background: rgba(255, 68, 68, 0.06);
@@ -1146,6 +1124,174 @@
     .location-tile.empty-slot {
       opacity: 0;
       pointer-events: none;
+    }
+
+    /* ── Fog of war: tile identity not yet seen ── */
+    .location-tile.fogged {
+      background: var(--surface);
+    }
+
+    .location-tile.fogged .loc-name {
+      color: var(--muted);
+    }
+
+    /* ── Live weapon-range preview (shown when a weapon card is selected) ── */
+    /* Tracer line between attacker and target, rather than the whole range circle */
+    .location-tile.weapon-line {
+      outline: 2px solid rgba(68, 255, 136, 0.45);
+      outline-offset: -2px;
+    }
+
+    .location-tile.weapon-target-valid {
+      outline: 3px solid var(--green);
+      outline-offset: -3px;
+      animation: pulse-green 1s infinite;
+    }
+
+    .location-tile.weapon-target-invalid {
+      outline: 3px solid var(--accent2);
+      outline-offset: -3px;
+    }
+
+    .weapon-bullseye {
+      position: absolute;
+      top: -4px;
+      right: -2px;
+      font-size: 0.85rem;
+      line-height: 1;
+      filter: drop-shadow(0 0 3px rgba(68, 255, 136, 0.9));
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    @keyframes pulse-green {
+
+      0%,
+      100% {
+        box-shadow: 0 0 6px rgba(68, 255, 136, 0.3)
+      }
+
+      50% {
+        box-shadow: 0 0 16px rgba(68, 255, 136, 0.6)
+      }
+    }
+
+    .loc-name {
+      font-family: 'Black Ops One', 'Impact', 'Arial Black', sans-serif;
+      font-size: 0.6rem;
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    .loc-effect {
+      font-size: 0.5rem;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1;
+    }
+
+    .loc-effect.hero-zone {
+      color: var(--hero);
+    }
+
+    .loc-effect.villain-zone {
+      color: var(--villain);
+    }
+
+    .loc-effect.danger {
+      color: var(--accent2);
+    }
+
+    .loc-effect.buff {
+      color: var(--green);
+    }
+
+    .loc-effect.neutral {
+      color: var(--muted);
+    }
+
+    .loc-icons {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      pointer-events: none;
+    }
+
+    /* ── Token HP bars (above tokens on arena tiles) ── */
+    .token-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      pointer-events: none;
+    }
+
+    .token-hp-bar {
+      width: 22px;
+      height: 4px;
+      background: var(--surface);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .token-hp-fill {
+      height: 100%;
+      background: var(--green);
+      transition: width 0.4s, background 0.4s;
+    }
+
+    /* ── Shield sub-bar (segmented by armor durability, stacked above HP) ── */
+    .token-shield-bar {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      margin-bottom: 1px;
+    }
+
+    .shield-segment {
+      width: 3px;
+      height: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1px;
+    }
+
+    .shield-segment.filled {
+      background: var(--hero);
+      border-color: var(--hero);
+      box-shadow: 0 0 3px var(--hero);
+    }
+
+    .shield-label {
+      font-size: 0.42rem;
+      line-height: 1;
+      color: var(--hero);
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      margin-left: 2px;
+    }
+
+    @media (max-width: 700px) {
+      .token-hp-bar {
+        width: 16px;
+        height: 3px;
+      }
+
+      .token-stack {
+        gap: 1px;
+      }
+
+      .shield-segment {
+        width: 2px;
+        height: 3px;
+      }
+
+      .shield-label {
+        font-size: 0.36rem;
+      }
     }
 
     /* ── Equip screen: arrow/shield-shaped slot markers over the paperdoll ── */
@@ -1216,6 +1362,11 @@
     .equip-pick-row.selected {
       border-color: var(--green);
       background: rgba(68, 255, 136, 0.08);
+    }
+
+    .equip-pick-row.locked {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
 
     .equip-pick-row .epr-icon {
@@ -1299,114 +1450,6 @@
       margin-top: 3px;
       font-size: 0.55rem;
       padding: 4px 2px;
-    }
-
-    /* ── Live weapon-range preview (shown when a weapon card is selected) ── */
-    .location-tile.in-weapon-range {
-      outline: 2px solid rgba(68, 255, 136, 0.45);
-      outline-offset: -2px;
-    }
-
-    .location-tile.weapon-target-valid {
-      outline: 3px solid var(--green);
-      outline-offset: -3px;
-      animation: pulse-green 1s infinite;
-    }
-
-    .location-tile.weapon-target-invalid {
-      outline: 3px solid var(--accent2);
-      outline-offset: -3px;
-    }
-
-    @keyframes pulse-green {
-
-      0%,
-      100% {
-        box-shadow: 0 0 6px rgba(68, 255, 136, 0.3)
-      }
-
-      50% {
-        box-shadow: 0 0 16px rgba(68, 255, 136, 0.6)
-      }
-    }
-
-    .loc-name {
-      font-family: 'Black Ops One', 'Impact', 'Arial Black', sans-serif;
-      font-size: 0.6rem;
-      line-height: 1.2;
-      color: var(--text);
-    }
-
-    .loc-effect {
-      font-size: 0.5rem;
-      color: var(--muted);
-      margin-top: 2px;
-      line-height: 1;
-    }
-
-    .loc-effect.hero-zone {
-      color: var(--hero);
-    }
-
-    .loc-effect.villain-zone {
-      color: var(--villain);
-    }
-
-    .loc-effect.danger {
-      color: var(--accent2);
-    }
-
-    .loc-effect.buff {
-      color: var(--green);
-    }
-
-    .loc-effect.neutral {
-      color: var(--muted);
-    }
-
-    .loc-icons {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
-      pointer-events: none;
-    }
-
-    /* ── Token HP bars (above tokens on arena tiles) ── */
-    .token-stack {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      pointer-events: none;
-    }
-
-    .token-hp-bar {
-      width: 22px;
-      height: 4px;
-      background: var(--surface);
-      border-radius: 3px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-
-    .token-hp-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
-      transition: width 0.4s;
-    }
-
-    @media (max-width: 700px) {
-      .token-hp-bar {
-        width: 16px;
-        height: 3px;
-      }
-
-      .token-stack {
-        gap: 1px;
-      }
     }
 
     .player-token {
@@ -2029,9 +2072,9 @@
             <div class="col-label" style="flex-shrink:0;">YOU</div>
             <button class="btn primary" id="btn-skip" onclick="skipPhase()" disabled=""
               style="font-size:0.5rem;padding:2px 6px;letter-spacing:0.5px;flex-shrink:0;">END TURN</button>
-            <button class="btn" id="btn-xray" onclick="playerXray()"
+            <button class="btn" id="btn-xray" onclick="playerXray()" title="Radar: ping for the enemy's direction and range"
               style="display:none;font-size:0.5rem;padding:2px 6px;letter-spacing:0.5px;flex-shrink:0;background:rgba(74,184,255,0.15);border-color:rgba(74,184,255,0.5);color:#4ab8ff;">
-              🔍</button>
+              📡</button>
             <button class="btn danger" onclick="retreat()" style="font-size:0.5rem;padding:2px 6px;flex-shrink:0;"
               title="End the match early">🏳</button>
           </div>
@@ -2179,7 +2222,8 @@
       </div>
       <p style="color:var(--muted);font-size:0.72rem;margin-bottom:10px;">
         Tap a slot to choose gear. Hand slots (weapons/shields/items) become your starting hand — the rest are worn
-        passively from turn 1.
+        passively from turn 1. Only 2 pieces of armor (head/chest/legs/feet/arms) can be active at once, same as
+        in-match equipping.
       </p>
       <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start;">
         <div id="equip-doll-wrap" style="position:relative;width:280px;flex-shrink:0;">
@@ -2249,6 +2293,7 @@
         <div id="shop-credits" style="font-size:0.85rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
       </div>
       <div id="shop-tabs" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;"></div>
+      <div id="shop-msg" style="min-height:1.2em;font-size:0.65rem;color:var(--accent2);margin-bottom:6px;"></div>
       <div id="shop-grid"
         style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;max-height:50vh;overflow-y:auto;padding:2px;">
       </div>

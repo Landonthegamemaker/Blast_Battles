@@ -114,9 +114,11 @@ function hpBarColor(pct) {
         return dist <= card.range;
       }
       if (card.type === 'defense') {
-        // extra_carry (Tracy Guns) and dual_wield (Pete) cannot use defense cards
+        // extra_carry (Tracy Guns): weapons only, no exceptions.
+        // dual_wield (Pete): both hands full of pistols — armor is locked, but
+        // healing items don't need a free hand, so those are still allowed.
         if (G.playerChar.attribute === 'extra_carry') return false;
-        if (G.playerChar.attribute === 'dual_wield') return false;
+        if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) return false;
         if (card.healAmount > 0) {
           return G.playerChar.hp < G.playerChar.maxHp &&
             G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;
