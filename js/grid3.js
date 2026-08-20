@@ -83,15 +83,15 @@ function getReachable(pos, steps) {
  * in one move action, given the number of allowed `steps`.
  *
  * Movement patterns:
- *   • default (all characters) — cardinal rook: straight lines only, no
- *     diagonals. This now includes healing (Macy the Medic) and swift_melee
- *     (Lunging Logan) — every character moves along the grid's rows and
- *     columns rather than cutting corners.
+ *   • healing (Macy the Medic) — cardinal rook: straight lines only,
+ *     no diagonals. Thematic: medic moving along corridors.
+ *   • all others               — standard Chebyshev king moves (8 directions),
+ *     including swift_melee (Lunging Logan).
  *
  * Design notes:
- *   - Cardinal-only movement keeps positioning readable at a glance — no more
- *     surprise diagonal lunges into range.
- *   - Guarantees every tile is reachable across multiple turns.
+ *   - Logan's diagonal movement is intentional and thematic (zig-zag pursuit).
+ *   - Macy's cardinal restriction keeps her feeling like a support character.
+ *   - Both patterns guarantee every tile is reachable across multiple turns.
  *
  * @param {{ attribute: string }} char - Character object (only `.attribute` is read)
  * @param {number} pos   - Current tile index (0–48)
@@ -99,18 +99,23 @@ function getReachable(pos, steps) {
  * @returns {number[]}
  */
 function getReachableForChar(char, pos, steps) {
-  // Cardinal moves only — exactly 1 axis changes, the other stays zero
-  const pr = rowOf(pos), pc = colOf(pos);
-  const result = [];
-  for (let i = 0; i < 49; i++) {
-    if (i === pos) continue;
-    const dr = Math.abs(rowOf(i) - pr);
-    const dc = Math.abs(colOf(i) - pc);
-    if ((dr === 0 && dc <= steps && dc > 0) || (dc === 0 && dr <= steps && dr > 0)) {
-      result.push(i);
+  if (char.attribute === 'healing') {
+    // Macy: cardinal moves only — exactly 1 axis changes, the other stays zero
+    const pr = rowOf(pos), pc = colOf(pos);
+    const result = [];
+    for (let i = 0; i < 49; i++) {
+      if (i === pos) continue;
+      const dr = Math.abs(rowOf(i) - pr);
+      const dc = Math.abs(colOf(i) - pc);
+      if ((dr === 0 && dc <= steps && dc > 0) || (dc === 0 && dr <= steps && dr > 0)) {
+        result.push(i);
+      }
     }
+    return result;
   }
-  return result;
+
+  // Default: standard Chebyshev king moves for all other characters
+  return getReachable(pos, steps);
 }
 
 // ── Distance ─────────────────────────────────────────────────────────────────
@@ -129,28 +134,4 @@ function getDistance(a, b) {
     Math.abs(rowOf(a) - rowOf(b)),
     Math.abs(colOf(a) - colOf(b))
   );
-}
-
-/**
- * Returns the tile indices forming a straight line-of-fire from `a` to `b`,
- * stepping diagonally whenever both row and column still differ (king-move
- * line), so the path length always equals `getDistance(a, b)`. The origin
- * tile `a` is excluded; the destination tile `b` is included as the last
- * entry. Used to highlight the shot's path between attacker and target
- * rather than the weapon's entire range.
- *
- * @param {number} a - Origin tile index (0–48)
- * @param {number} b - Destination tile index (0–48)
- * @returns {number[]}
- */
-function getLinePath(a, b) {
-  let r = rowOf(a), c = colOf(a);
-  const tr = rowOf(b), tc = colOf(b);
-  const path = [];
-  while (r !== tr || c !== tc) {
-    if (r < tr) r++; else if (r > tr) r--;
-    if (c < tc) c++; else if (c > tc) c--;
-    path.push(r * 7 + c);
-  }
-  return path;
 }

@@ -324,14 +324,16 @@
       const swiftSteps = isSwift ? (PHASES[G.phase] === 'fast' ? 2 : 1) : 1;
       const reachable = G.awaitingMove ? getReachableForChar(G.playerChar, G.playerPos, swiftSteps) : [];
 
-      // Live weapon-range preview — if the player has a weapon card selected, tiles within
-      // its range from the player's current position get a green outline, and the bot's
-      // occupied tile is flagged valid/invalid to explain why FIRE is (or isn't) available.
+      // Live weapon-range preview — if the player has a weapon card selected, the tiles
+      // forming the straight line-of-fire between player and bot get a green outline,
+      // and the bot's tile gets a 🎯 bullseye plus a valid/invalid outline to explain
+      // why FIRE is (or isn't) available.
       const selCard = (!G.awaitingScrapChoice && G.selectedCard && !G.gameOver && !G.playerActedThisPhase)
         ? (G.playerHand.find(c => c.id === G.selectedCard) || G.playerInPlay.find(c => c.id === G.selectedCard))
         : null;
       const showRangePreview = !!(selCard && selCard.type === 'weapon');
       const previewRange = showRangePreview ? (selCard.subtype === 'melee' ? 0 : selCard.range) : -1;
+      const linePath = showRangePreview ? new Set(getLinePath(G.playerPos, G.botPos)) : null;
 
       // Per-token HP bars, with a segmented shield sub-bar for any equipped armor.
       // Segment count = summed maxDurability of all equipped armor; filled segments
@@ -352,7 +354,7 @@
         ).join('');
         return `<div class="token-shield-bar">${segments}<span class="shield-label">${durability}</span></div>`;
       };
-      const tokenHpBar = (pct, inPlay) => `<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%"></div></div>${shieldBarHtml(inPlay)}`;
+      const tokenHpBar = (pct, inPlay) => `${shieldBarHtml(inPlay)}<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%"></div></div>`;
 
       // 7x7 grid: 7 rows × 7 cols = 49 tiles
       for (let r = 0; r < 7; r++) {
@@ -381,8 +383,8 @@
             const inRange = dist <= previewRange;
             if (bHere) {
               tile.classList.add(inRange ? 'weapon-target-valid' : 'weapon-target-invalid');
-            } else if (inRange) {
-              tile.classList.add('in-weapon-range');
+            } else if (linePath.has(idx)) {
+              tile.classList.add('weapon-line');
             }
           }
 
@@ -391,6 +393,7 @@
           ${pHere ? `<div class="token-stack">${tokenHpBar(pPct, G.playerInPlay)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
           ${bHere ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
         </div>
+        ${showRangePreview && bHere ? '<div class="weapon-bullseye">🎯</div>' : ''}
         <div class="loc-name">${revealed ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
         <div class="loc-effect ${revealed ? loc.css : ''}">${revealed ? loc.effectDesc : ''}</div>
         <div class="loc-dist">${dist > 0 ? dist + 'sp' : ''}</div>
