@@ -146,8 +146,6 @@ function playerMove(locIndex) {
   } else if (reachable.includes(locIndex)) {
     logMsg('player', `You move to ${G.locations[locIndex].name}.`);
     G.playerPos = locIndex;
-    if (!G.revealedTiles) G.revealedTiles = new Set();
-    G.revealedTiles.add(locIndex);
     G.playerMovedThisPhase = true;
     BB_Audio.stopSfx();
     BB_Audio.playZoneSfx(G.locations[locIndex].effect);

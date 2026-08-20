@@ -146,7 +146,7 @@ const GEAR_POOL_BASE = [
   { id: 'g1', name: 'Hard Hat', type: 'defense', subtype: 'gear_head', defense: 25, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '⛑️', slot: 'head' },
   { id: 'g2', name: 'Face Mask', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['pistol'], healAmount: 0, icon: '😷', slot: 'head' },
   { id: 'g3', name: 'Gas Mask', type: 'defense', subtype: 'gear_head', defense: 30, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🥽', slot: 'head' },
-  { id: 'g4', name: 'Night Vision Goggles', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head' },
+  { id: 'g4', name: 'Night Vision Goggles', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head', nightVision: true },
   // Chest — Jacket (carries extra items: +1 max hand size, see getMaxHandSize)
   { id: 'g5', name: 'Field Jacket', type: 'defense', subtype: 'gear_chest', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest', carryBonus: 1 },
   // Legs

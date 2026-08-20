@@ -1142,6 +1142,17 @@
       color: var(--muted);
     }
 
+    /* ── Night Vision Goggles — terrain shown, translucent green, bot NOT revealed ── */
+    .location-tile.nvg-tile {
+      background: rgba(68, 255, 136, 0.10);
+      border-color: rgba(68, 255, 136, 0.35);
+    }
+
+    .location-tile.nvg-tile .loc-name,
+    .location-tile.nvg-tile .loc-effect {
+      color: #8affc1;
+    }
+
     /* ── Live weapon-range preview (shown when a weapon card is selected) ── */
     /* Tracer line between attacker and target, rather than the whole range circle */
     .location-tile.weapon-line {

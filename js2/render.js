@@ -5,6 +5,20 @@
  * Exports (browser globals): render, renderCharDisplay, renderHand, renderBotHand, renderArena, renderInPlay, renderDeckSizes, updatePhaseUI, updateHint, showHelp, toggleHand
  */
 'use strict';
+
+/**
+ * HP threshold → colour, shared by the side-panel HP text and the arena's
+ * mini token HP bar. >50% green, 26–50% yellow/orange, <=25% red.
+ *
+ * @param {number} pct - Current HP as a percentage of max HP (0–100)
+ * @returns {string} CSS colour value
+ */
+function hpBarColor(pct) {
+  if (pct <= 25) return 'var(--accent2)'; // red
+  if (pct <= 50) return 'var(--slow)';    // yellow/orange
+  return 'var(--green)';                  // green
+}
+
     function render() {
       renderCharDisplay('player-char-display', G.playerChar, G.locations[G.playerPos]);
       renderCharDisplay('bot-char-display', G.botChar, G.locations[G.botPos]);
@@ -19,6 +33,8 @@
 
     function renderCharDisplay(elId, char, loc) {
       const el = document.getElementById(elId); if (!el) return;
+      const pct = Math.max(0, (char.hp / char.maxHp) * 100);
+      const hpColor = hpBarColor(pct);
       const isHero = char.faction === 'hero';
       const borderColor = isHero ? 'var(--hero)' : 'var(--villain)';
       const glowColor = isHero ? 'rgba(74,184,255,0.35)' : 'rgba(196,75,255,0.35)';
@@ -46,7 +62,7 @@
           <div class="char-type ${char.faction}" style="font-size:0.5rem;flex-shrink:0;white-space:nowrap;">${char.faction.toUpperCase()}</div>
         </div>
         <div class="hp-bar-wrap">
-          <div class="hp-label">${char.hp}/${char.maxHp} HP</div>
+          <div class="hp-label" style="color:${hpColor};">${char.hp}/${char.maxHp} HP</div>
           <div class="hp-label">${(() => {
           const isPlayer = char === G.playerChar;
           const hand = isPlayer ? G.playerHand : G.botHand;
@@ -98,9 +114,11 @@
         return dist <= card.range;
       }
       if (card.type === 'defense') {
-        // extra_carry (Tracy Guns) and dual_wield (Pete) cannot use defense cards
+        // extra_carry (Tracy Guns): weapons only, no exceptions.
+        // dual_wield (Pete): both hands full of pistols — armor is locked, but
+        // healing items don't need a free hand, so those are still allowed.
         if (G.playerChar.attribute === 'extra_carry') return false;
-        if (G.playerChar.attribute === 'dual_wield') return false;
+        if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) return false;
         if (card.healAmount > 0) {
           return G.playerChar.hp < G.playerChar.maxHp &&
             G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;
@@ -113,8 +131,11 @@
     function renderPlayerCards() {
       const el = document.getElementById('player-all-cards'); if (!el) return;
       el.innerHTML = '';
+      // Equipped weapons float to the top, then equipped defense, then hand cards —
+      // keeps the active loadout visually up front regardless of pickup order.
       const allCards = [
-        ...G.playerInPlay.map(c => ({ card: c, inPlay: true })),
+        ...G.playerInPlay.filter(c => c.type === 'weapon').map(c => ({ card: c, inPlay: true })),
+        ...G.playerInPlay.filter(c => c.type === 'defense').map(c => ({ card: c, inPlay: true })),
         ...G.playerHand.map(c => ({ card: c, inPlay: false }))
       ];
       for (const { card, inPlay } of allCards) {
@@ -318,38 +339,37 @@
       const swiftSteps = isSwift ? (PHASES[G.phase] === 'fast' ? 2 : 1) : 1;
       const reachable = G.awaitingMove ? getReachableForChar(G.playerChar, G.playerPos, swiftSteps) : [];
 
-      // Live weapon-range preview — if the player has a weapon card selected, tiles within
-      // its range from the player's current position get a green outline, and the bot's
-      // occupied tile is flagged valid/invalid to explain why FIRE is (or isn't) available.
+      // Live weapon-range preview — if the player has a weapon card selected, the tiles
+      // forming the straight line-of-fire between player and bot get a green outline,
+      // and the bot's tile gets a 🎯 bullseye plus a valid/invalid outline to explain
+      // why FIRE is (or isn't) available.
       const selCard = (!G.awaitingScrapChoice && G.selectedCard && !G.gameOver && !G.playerActedThisPhase)
         ? (G.playerHand.find(c => c.id === G.selectedCard) || G.playerInPlay.find(c => c.id === G.selectedCard))
         : null;
       const showRangePreview = !!(selCard && selCard.type === 'weapon');
       const previewRange = showRangePreview ? (selCard.subtype === 'melee' ? 0 : selCard.range) : -1;
+      const linePath = showRangePreview ? new Set(getLinePath(G.playerPos, G.botPos)) : null;
 
-      // Per-token HP + shield bars. Shield = equipped armor durability (blank if none equipped).
+      // Per-token HP bars, with a segmented shield sub-bar for any equipped armor.
+      // Segment count = summed maxDurability of all equipped armor; filled segments
+      // = summed remaining durability (i.e. hits the armor can still absorb).
       const pPct = Math.max(0, (G.playerChar.hp / G.playerChar.maxHp) * 100);
       const bPct = Math.max(0, (G.botChar.hp / G.botChar.maxHp) * 100);
-      const shieldPct = inPlay => {
+      const getShieldStatus = inPlay => {
         const armor = inPlay.filter(c => c.type === 'defense' && c.healAmount === 0);
-        if (armor.length === 0) return null;
-        const cur = armor.reduce((s, a) => s + a.durability, 0);
-        const max = armor.reduce((s, a) => s + a.maxDurability, 0);
-        return max > 0 ? Math.max(0, (cur / max) * 100) : 0;
+        const durability = armor.reduce((sum, c) => sum + Math.max(0, c.durability), 0);
+        const maxDurability = armor.reduce((sum, c) => sum + c.maxDurability, 0);
+        return { durability, maxDurability };
       };
-      const pShield = shieldPct(G.playerInPlay);
-      const bShield = shieldPct(G.botInPlay);
-      const tokenBars = (hpPct, shPct) => `
-        ${shPct != null ? `<div class="token-shield-bar"><div class="token-shield-fill" style="width:${shPct}%"></div></div>` : ''}
-        <div class="token-hp-bar"><div class="token-hp-fill" style="width:${hpPct}%"></div></div>
-      `;
-
-      // Fog of war — a tile's identity is known once the player has stepped on it (permanent),
-      // or while it's currently adjacent to the player (temporary). The bot itself is only
-      // visible when currently adjacent — knowing a tile doesn't mean you can see who's on it.
-      const revealed = G.revealedTiles || new Set();
-      const isKnownTile = idx => revealed.has(idx) || getDistance(G.playerPos, idx) <= 1;
-      const botVisible = getDistance(G.playerPos, G.botPos) <= 1;
+      const shieldBarHtml = inPlay => {
+        const { durability, maxDurability } = getShieldStatus(inPlay);
+        if (maxDurability <= 0) return '';
+        const segments = Array.from({ length: maxDurability }, (_, i) =>
+          `<div class="shield-segment${i < durability ? ' filled' : ''}"></div>`
+        ).join('');
+        return `<div class="token-shield-bar">${segments}<span class="shield-label">${durability}</span></div>`;
+      };
+      const tokenHpBar = (pct, inPlay) => `${shieldBarHtml(inPlay)}<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%;background:${hpBarColor(pct)}"></div></div>`;
 
       // 7x7 grid: 7 rows × 7 cols = 49 tiles
       for (let r = 0; r < 7; r++) {
@@ -362,36 +382,40 @@
           tile.className = 'location-tile';
           const pHere = G.playerPos === idx;
           const bHere = G.botPos === idx;
-          if (pHere && bHere) tile.classList.add('both-here');
+          const dist = getDistance(G.playerPos, idx);
+          // Fog of war only applies on Hard & Impossible — on Easy & Medium the whole
+          // arena (including the bot's position) is always visible. On the two harder
+          // difficulties, only the player's own tile and its immediate (1-tile) radius
+          // are visible — live, not permanent, so tiles go dark again once the player
+          // moves away. The bot only appears within that same radius, or briefly while
+          // a Radar ping (Tactical Tim) has located it.
+          const fogEnabled = G.difficulty === 'hard' || G.difficulty === 'impossible';
+          const revealed = !fogEnabled || dist <= 1 || (bHere && G.radarPingActive);
+          const botVisible = bHere && revealed;
+          if (!revealed) tile.classList.add('fogged');
+          if (pHere && botVisible) tile.classList.add('both-here');
           else if (pHere) tile.classList.add('player-here');
-          else if (bHere) tile.classList.add('bot-here');
+          else if (botVisible) tile.classList.add('bot-here');
           if (G.awaitingMove && reachable.includes(idx)) tile.classList.add('selectable');
           else if (G.awaitingMove && !pHere) tile.classList.add('not-reachable');
 
-          const dist = getDistance(G.playerPos, idx);
-          const known = isKnownTile(idx);
-          if (!known) tile.classList.add('fog');
-
           if (showRangePreview) {
             const inRange = dist <= previewRange;
-            if (bHere) {
+            if (botVisible) {
               tile.classList.add(inRange ? 'weapon-target-valid' : 'weapon-target-invalid');
-            } else if (inRange) {
-              tile.classList.add('in-weapon-range');
+            } else if (linePath.has(idx)) {
+              tile.classList.add('weapon-line');
             }
           }
 
-          const showBotToken = bHere && botVisible;
-          const locBlock = known
-            ? `<div class="loc-name">${loc.icon} ${loc.name}</div><div class="loc-effect ${loc.css}">${loc.effectDesc}</div>`
-            : `<div class="loc-name">❓ ???</div><div class="loc-effect neutral">Unexplored</div>`;
-
           tile.innerHTML = `
         <div class="loc-icons">
-          ${pHere ? `<div class="token-stack">${tokenBars(pPct, pShield)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
-          ${showBotToken ? `<div class="token-stack">${tokenBars(bPct, bShield)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
+          ${pHere ? `<div class="token-stack">${tokenHpBar(pPct, G.playerInPlay)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
+          ${botVisible ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
         </div>
-        ${locBlock}
+        ${showRangePreview && botVisible ? '<div class="weapon-bullseye">🎯</div>' : ''}
+        <div class="loc-name">${revealed ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
+        <div class="loc-effect ${revealed ? loc.css : ''}">${revealed ? loc.effectDesc : ''}</div>
         <div class="loc-dist">${dist > 0 ? dist + 'sp' : ''}</div>
       `;
           if (G.awaitingMove) {
@@ -430,12 +454,12 @@
         skipBtn.textContent = 'END TURN';
       }
 
-      // Tactical Tim X-Ray button — show when available
+      // Tactical Tim Radar button — show when available
       const xrayBtn = document.getElementById('btn-xray');
       if (xrayBtn) {
         const canXray = G.playerChar.attribute === 'tactical_xray'
           && !G.playerActedThisPhase && !G.xrayUsedThisPhase
-          && !G.gameOver && G.botHand.length > 0;
+          && !G.gameOver;
         xrayBtn.style.display = G.playerChar.attribute === 'tactical_xray' ? 'inline-flex' : 'none';
         xrayBtn.disabled = !canXray;
         xrayBtn.style.opacity = canXray ? '1' : '0.4';

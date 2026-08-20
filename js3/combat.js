@@ -1,6 +1,6 @@
 /**
  * combat.js — Blast Battles combat resolution & game-state helpers
- * Dependencies (must load first): data.js, utils.js, grid.js
+ * Dependencies (must load first): data.js, utils.js, grid.js, progression.js (awardMatchCredits)
  * Reads/writes the global `G` object (game state).
  * Calls: logMsg() (game-state.js), render() (render.js), clearPhaseTimer() (game-state.js)
  *
@@ -40,66 +40,10 @@ const MAX_MATCH_TIME_SEC = 1600; // 20 turns × 4 phases × 20s
 // ── Range & damage multipliers ───────────────────────────────────────────────
 
 /**
- * Fraction of direct-hit damage that "anything within 1 tile of the hit"
- * takes — used for grenade self-splash (the attacker throwing at close range)
- * and for near-miss splash (a dodged shot that still lands nearby).
- */
-const AOE_SPLASH_MULTIPLIER = 0.5;
-
-/**
- * Explosive/missile weapons detonate on impact — anyone within 1 tile of the
- * target's tile (including the attacker themselves, on a close-range throw)
- * takes splash damage. Returns 0 when the attacker was outside the blast
- * radius (dist > 1), so lobbing a grenade from range is safe.
- *
- * @param {number} finalDmg   - The direct-hit damage already dealt to the target
- * @param {number} attackerDist - Chebyshev distance from attacker to target
- * @returns {number}
- */
-function getExplosiveSplashDamage(finalDmg, attackerDist) {
-  return attackerDist <= 1 ? Math.round(finalDmg * AOE_SPLASH_MULTIPLIER) : 0;
-}
-
-/**
- * A dodged ("missed") shot still detonates/lands near the target — they take
- * partial splash damage rather than walking away completely unscathed.
- *
- * @param {number} finalDmg - The damage that would have been dealt on a direct hit
- * @returns {number}
- */
-function getMissSplashDamage(finalDmg) {
-  return Math.round(finalDmg * AOE_SPLASH_MULTIPLIER);
-}
-
-/**
- * The fraction of full damage a shot still deals at point-blank (dist 0).
- * Damage scales linearly from this floor up to 100% at the weapon's max range.
- */
-const MIN_RANGE_MULTIPLIER = 0.5;
-
-/**
- * Returns the damage multiplier for a shot at `dist` from a weapon with the
- * given max `range`. Linear from MIN_RANGE_MULTIPLIER at dist 0 up to 1.0 at
- * max range — rewards positioning at range without ever hitting literal zero
- * damage on a point-blank shot.
- *
- * @param {{ subtype: string, range: number }} card
- * @param {number} dist - Chebyshev distance to target
- * @returns {number}
- */
-function getRangeMultiplier(card, dist) {
-  if (card.subtype === 'melee') return 1;
-  if (card.range === 0) return 1; // safety guard — no divide-by-zero
-  return MIN_RANGE_MULTIPLIER + (1 - MIN_RANGE_MULTIPLIER) * (dist / card.range);
-}
-
-/**
  * Scales base damage by how far the shooter is from their maximum range.
  * Melee always deals full damage at contact (range 0 — no scaling).
- * All other weapons scale linearly: full damage at max range, down to
- * MIN_RANGE_MULTIPLIER (never zero) at point-blank range.
- * This rewards positioning and makes snipers devastating at max range,
- * without making a point-blank shot deal literally nothing.
+ * All other weapons scale linearly: full damage at max range, less when closer.
+ * This rewards positioning and makes snipers devastating at max range.
  *
  * @param {number} baseDmg
  * @param {{ subtype: string, range: number }} card
@@ -107,7 +51,9 @@ function getRangeMultiplier(card, dist) {
  * @returns {number}
  */
 function applyRangeMultiplier(baseDmg, card, dist) {
-  return Math.round(baseDmg * getRangeMultiplier(card, dist));
+  if (card.subtype === 'melee') return baseDmg; // melee: full damage at range 0
+  if (card.range === 0) return baseDmg;          // safety guard — no divide-by-zero
+  return Math.round(baseDmg * (dist / card.range));
 }
 
 /**
@@ -283,10 +229,14 @@ function getEffectiveSpeed(char, hand, inPlay) {
  * @returns {number}
  */
 function getMaxHandSize(char) {
-  if (char.attribute === 'extra_carry')   return 5;
-  if (char.attribute === 'dual_wield')    return 4;
-  if (char.attribute === 'tactical_xray') return 4;
-  return 4;
+  let base = 4;
+  if (char.attribute === 'extra_carry')   base = 5;
+  if (char.attribute === 'dual_wield')    base = 4;
+  if (char.attribute === 'tactical_xray') base = 4;
+  // Field Jacket (chest gear, carryBonus:1) — check whichever side this char belongs to
+  const inPlay = char === G.playerChar ? G.playerInPlay : char === G.botChar ? G.botInPlay : [];
+  const carryBonus = (inPlay || []).reduce((sum, c) => sum + (c.carryBonus || 0), 0);
+  return base + carryBonus;
 }
 
 /** Total cards (hand + in-play) currently held by the player. */
@@ -735,6 +685,8 @@ function endGame(winner, timeLimit = false) {
   const secs    = elapsed % 60;
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(winner) : 0;
+
   const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
   const pHealWon = G.playerHealTotal > G.botHealTotal;
   const edge     = !pDmgWon && !pHealWon ? 'DMG & Healing'
@@ -745,19 +697,19 @@ function endGame(winner, timeLimit = false) {
   let title, msg;
   if (draw) {
     title = '🤝 DRAW!';
-    msg   = `You and ${G.botChar.name} somehow ended up with equal DMG & Healing!`;
+    msg   = `You and ${G.botChar.name} somehow ended up with equal DMG & Healing! (+${creditsEarned} 💰)`;
   } else if (timeLimit) {
     title = won ? '🏆 VICTORY! ⏳' : '💀 DEFEATED ⏳';
     msg   = won
-      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
-      : `Time's up — ${G.botChar.name} outscored you in ${edge}.`;
+      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}! (+${creditsEarned} 💰)`
+      : `Time's up — ${G.botChar.name} outscored you in ${edge}. (+${creditsEarned} 💰)`;
   } else {
     title = won ? '🏆 VICTORY!' : '💀 DEFEATED';
     msg   = won
-      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
+      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}! (+${creditsEarned} 💰)`
       : (G.lastKillingBlow
-          ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.`
-          : `${G.botChar.name} has eliminated you.`);
+          ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}. (+${creditsEarned} 💰)`
+          : `${G.botChar.name} has eliminated you. (+${creditsEarned} 💰)`);
   }
 
   document.getElementById('modal-title').textContent = title;
@@ -807,6 +759,8 @@ function retreat() {
   logMsg('system', '🏳️ You retreated from battle.');
   G.gameOver = true;
 
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits('retreat') : 0;
+
   const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
   const mins    = Math.floor(elapsed / 60);
   const secs    = elapsed % 60;
@@ -827,7 +781,7 @@ function retreat() {
   const rBImg         = rBSrc ? `<img class="modal-char-img" src="${rBSrc}"${rBImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${rBPortBg};">${G.botChar.icon}</div>`;
 
   document.getElementById('modal-title').textContent = '🏳️ ESCAPED';
-  document.getElementById('modal-msg').textContent   = 'You live to fight another battle.';
+  document.getElementById('modal-msg').textContent   = `You live to fight another battle. (+${creditsEarned} 💰)`;
   document.getElementById('modal-stats').innerHTML   = buildModalStatsHTML({
     pImg: rPImg, bImg: rBImg,
     pBorderColor: rPFaction, bBorderColor: rBFaction,

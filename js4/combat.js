@@ -1,6 +1,6 @@
 /**
  * combat.js — Blast Battles combat resolution & game-state helpers
- * Dependencies (must load first): data.js, utils.js, grid.js, progression.js (awardMatchCredits)
+ * Dependencies (must load first): data.js, utils.js, grid.js
  * Reads/writes the global `G` object (game state).
  * Calls: logMsg() (game-state.js), render() (render.js), clearPhaseTimer() (game-state.js)
  *
@@ -21,7 +21,6 @@
  *   playerScrapCard(cardId)
  *   isCardPlayable(card)                               → boolean
  *   checkWin()
- *   computeBattleScore(isRetreat?)                     → { battleFinal, survivBonus, earlyExitPenalty }
  *   endGame(winner, timeLimit?)
  *   retreat()
  *   buildModalStatsHTML(opts)                          → string (HTML)
@@ -284,14 +283,10 @@ function getEffectiveSpeed(char, hand, inPlay) {
  * @returns {number}
  */
 function getMaxHandSize(char) {
-  let base = 4;
-  if (char.attribute === 'extra_carry')   base = 5;
-  if (char.attribute === 'dual_wield')    base = 4;
-  if (char.attribute === 'tactical_xray') base = 4;
-  // Field Jacket (chest gear, carryBonus:1) — check whichever side this char belongs to
-  const inPlay = char === G.playerChar ? G.playerInPlay : char === G.botChar ? G.botInPlay : [];
-  const carryBonus = (inPlay || []).reduce((sum, c) => sum + (c.carryBonus || 0), 0);
-  return base + carryBonus;
+  if (char.attribute === 'extra_carry')   return 5;
+  if (char.attribute === 'dual_wield')    return 4;
+  if (char.attribute === 'tactical_xray') return 4;
+  return 4;
 }
 
 /** Total cards (hand + in-play) currently held by the player. */
@@ -569,7 +564,7 @@ function isCardPlayable(card) {
 
   if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') return false; // Tracy Guns: weapons only
-    if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) return false; // Pete: no armor, healing OK
+    if (G.playerChar.attribute === 'dual_wield')  return false; // Pete: weapons only
     if (card.healAmount > 0) {
       return G.playerChar.hp < G.playerChar.maxHp &&
              G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;
@@ -603,44 +598,6 @@ function checkWin() {
     else if (bScore > pScore) endGame('bot',    true);
     else                      endGame('draw',   true);
   }
-}
-
-/**
- * Computes the normalised Battle Score using tanh(net damage) + survivability bonus.
- * Shared by the end-game modal display AND the credit-reward calculation
- * (progression.js awardMatchCredits), so both always agree on the same number.
- *
- * Battle Score formula:
- *   netPlayer    = playerDmgDealt - botHealTotal
- *   netBot       = botDmgDealt - playerHealTotal
- *   rawBattle    = netPlayer - netBot
- *   scale        = max(1, (totalDmg + totalHeal) / 2)   — prevents tanh saturating early
- *   survivBonus  = turnFrac × (pHpRatio - bHpRatio) - earlyExitPenalty
- *   battleFinal  = tanh(rawBattle / scale) + survivBonus
- *
- * @param {boolean} [isRetreat=false] - True when the match ended via retreat (adds the early-exit penalty)
- * @returns {{ battleFinal: number, survivBonus: number, earlyExitPenalty: number }}
- */
-function computeBattleScore(isRetreat = false) {
-  const netPlayer  = G.playerDmgDealt - G.botHealTotal;
-  const netBot     = G.botDmgDealt    - G.playerHealTotal;
-  const rawBattle  = netPlayer - netBot;
-
-  const MAX_EARLY_EXIT_PENALTY = 0.554;
-  const completionRatio  = G.turn / MAX_TURNS;
-  const earlyExitPenalty = isRetreat
-    ? Math.pow(1 - completionRatio, 2) * MAX_EARLY_EXIT_PENALTY
-    : 0;
-
-  const turnFrac    = Math.min(G.turn, MAX_TURNS) / MAX_TURNS;
-  const pHpRatio    = G.playerChar.hp / G.playerChar.maxHp;
-  const bHpRatio    = G.botChar.hp    / G.botChar.maxHp;
-  const survivBonus = turnFrac * (pHpRatio - bHpRatio) - earlyExitPenalty;
-
-  const scale       = Math.max(1, (G.playerDmgDealt + G.botDmgDealt + G.playerHealTotal + G.botHealTotal) / 2);
-  const battleFinal = Math.tanh(rawBattle / scale) + survivBonus;
-
-  return { battleFinal, survivBonus, earlyExitPenalty };
 }
 
 // ── Modal stats builder ───────────────────────────────────────────────────────
@@ -692,7 +649,23 @@ function buildModalStatsHTML(opts) {
     winner = 'player'
   } = opts;
 
-  const { battleFinal, survivBonus, earlyExitPenalty } = computeBattleScore(isRetreat);
+  const netPlayer  = G.playerDmgDealt - G.botHealTotal;
+  const netBot     = G.botDmgDealt    - G.playerHealTotal;
+  const rawBattle  = netPlayer - netBot;
+
+  const MAX_EARLY_EXIT_PENALTY = 0.554;
+  const completionRatio  = G.turn / MAX_TURNS;
+  const earlyExitPenalty = isRetreat
+    ? Math.pow(1 - completionRatio, 2) * MAX_EARLY_EXIT_PENALTY
+    : 0;
+
+  const turnFrac    = Math.min(G.turn, MAX_TURNS) / MAX_TURNS;
+  const pHpRatio    = G.playerChar.hp / G.playerChar.maxHp;
+  const bHpRatio    = G.botChar.hp    / G.botChar.maxHp;
+  const survivBonus = turnFrac * (pHpRatio - bHpRatio) - earlyExitPenalty;
+
+  const scale       = Math.max(1, (G.playerDmgDealt + G.botDmgDealt + G.playerHealTotal + G.botHealTotal) / 2);
+  const battleFinal = Math.tanh(rawBattle / scale) + survivBonus;
 
   const battleFinalDisplay = (battleFinal >= 0 ? '+' : '') + (Math.round(battleFinal * 1000) / 1000).toFixed(3);
   const battleFinalColor   = battleFinal >= 0 ? '#44ff88' : '#ff4444';
@@ -762,10 +735,6 @@ function endGame(winner, timeLimit = false) {
   const secs    = elapsed % 60;
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
-  const { battleFinal } = computeBattleScore(false);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal) : 0;
-  const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
-
   const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
   const pHealWon = G.playerHealTotal > G.botHealTotal;
   const edge     = !pDmgWon && !pHealWon ? 'DMG & Healing'
@@ -776,19 +745,19 @@ function endGame(winner, timeLimit = false) {
   let title, msg;
   if (draw) {
     title = '🤝 DRAW!';
-    msg   = `You and ${G.botChar.name} somehow ended up with equal DMG & Healing!${creditsStr}`;
+    msg   = `You and ${G.botChar.name} somehow ended up with equal DMG & Healing!`;
   } else if (timeLimit) {
     title = won ? '🏆 VICTORY! ⏳' : '💀 DEFEATED ⏳';
     msg   = won
-      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}`
-      : `Time's up — ${G.botChar.name} outscored you in ${edge}.${creditsStr}`;
+      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
+      : `Time's up — ${G.botChar.name} outscored you in ${edge}.`;
   } else {
     title = won ? '🏆 VICTORY!' : '💀 DEFEATED';
     msg   = won
-      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}`
+      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!`
       : (G.lastKillingBlow
-          ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.${creditsStr}`
-          : `${G.botChar.name} has eliminated you.${creditsStr}`);
+          ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.`
+          : `${G.botChar.name} has eliminated you.`);
   }
 
   document.getElementById('modal-title').textContent = title;
@@ -838,9 +807,6 @@ function retreat() {
   logMsg('system', '🏳️ You retreated from battle.');
   G.gameOver = true;
 
-  const { battleFinal } = computeBattleScore(true);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal) : 0;
-
   const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
   const mins    = Math.floor(elapsed / 60);
   const secs    = elapsed % 60;
@@ -861,7 +827,7 @@ function retreat() {
   const rBImg         = rBSrc ? `<img class="modal-char-img" src="${rBSrc}"${rBImgStyle}>` : `<div class="modal-char-img-placeholder" style="background:${rBPortBg};">${G.botChar.icon}</div>`;
 
   document.getElementById('modal-title').textContent = '🏳️ ESCAPED';
-  document.getElementById('modal-msg').textContent   = `You live to fight another battle. (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
+  document.getElementById('modal-msg').textContent   = 'You live to fight another battle.';
   document.getElementById('modal-stats').innerHTML   = buildModalStatsHTML({
     pImg: rPImg, bImg: rBImg,
     pBorderColor: rPFaction, bBorderColor: rBFaction,

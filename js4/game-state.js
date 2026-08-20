@@ -158,36 +158,7 @@ function initGame() {
     return [deepClone(weapon), deepClone(defense)];
   }
 
-  // Player's starting hand + passive gear — from the Equip screen loadout if one
-  // was made, otherwise fall back to the old random starterDeck (e.g. quick-play).
-  const hasLoadout = typeof PlayerLoadout !== 'undefined' && (PlayerLoadout.hand1 || PlayerLoadout.hand2);
-  const cloneLoadoutItem = id => {
-    const c = deepClone(ALL_EQUIPPABLE.find(i => i.id === id));
-    if (c.maxDurability) c.durability = c.maxDurability;
-    if (c.ammo !== undefined) c._maxAmmo = c.ammo;
-    c.id = c.id + '_eq_' + Math.random().toString(36).slice(2, 7); // guarantee uniqueness (dupes possible across slots)
-    return c;
-  };
-  let playerHand, playerLoadoutGear;
-  if (hasLoadout) {
-    playerHand = ['hand1', 'hand2'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
-    playerLoadoutGear = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
-
-    // Pistol Pete: the dual-wield "fire your second pistol free" mechanic is driven
-    // entirely by a shared dualWieldPairId — starterDeck() used to set this up, but
-    // the Equip screen never did, so loadout-built hands need it wired up here too.
-    if (playerChar.attribute === 'dual_wield') {
-      const pairable = playerHand.filter(c => c.type === 'weapon' && (c.subtype === 'pistol' || c.subtype === 'revolver'));
-      if (pairable.length >= 2) {
-        const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
-        pairable[0].dualWieldPairId = pairId;
-        pairable[1].dualWieldPairId = pairId;
-      }
-    }
-  } else {
-    playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
-    playerLoadoutGear = [];
-  }
+  const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
   const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
 
   // 7×7 grid — center tile always neutral
@@ -206,7 +177,7 @@ function initGame() {
     botChar: deepClone(botChar),
     playerHand,
     botHand,
-    playerInPlay: playerLoadoutGear,
+    playerInPlay: [],
     botInPlay: [],
     playerPos: 0,
     botPos: 48,
@@ -238,9 +209,6 @@ function initGame() {
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
   logMsg('system', `You start at ${G.locations[G.playerPos].name} (top-left). Bot starts at ${G.locations[G.botPos].name} (bottom-right).`);
-  if (playerLoadoutGear.length > 0) {
-    logMsg('system', `Equipped: ${playerLoadoutGear.map(g => `${g.icon} ${g.name}`).join(', ')}`);
-  }
   if (G.botChar.name.startsWith('Dark ')) {
     logMsg('system', `🥷 ${G.botChar.name} has mirrored ${G.playerChar.name} — same ability, same weakness!`);
   } else if (G.playerChar.name.startsWith('Dark ')) {
@@ -644,9 +612,7 @@ function playerPlayCard(card) {
     // ── Defense / Heal ──────────────────────────────────────────────────────────
   } else if (card.type === 'defense') {
     if (G.playerChar.attribute === 'extra_carry') { logMsg('system', `Tracy Guns carries only weapons — defense cards are locked.`); return; }
-    // Pete (dual_wield): both hands are full of pistols, so armor is locked — but a
-    // med kit doesn't need a free hand, so healing items are allowed.
-    if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) { logMsg('system', `Pistol Pete's hands are full — armor is locked (healing items are still OK).`); return; }
+    if (G.playerChar.attribute === 'dual_wield') { logMsg('system', `Pistol Pete carries only pistols — defense cards are locked.`); return; }
 
     if (card.healAmount > 0) {
       // Healing item

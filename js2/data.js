@@ -5,20 +5,37 @@
  * Exports (browser globals when loaded via <script>):
  *   SPEED_ORDER, PHASES,
  *   WEAPON_POOL, DEFENSE_POOL, GEAR_POOL, CHARACTER_POOL, LOCATION_POOL,
- *   ALL_EQUIPPABLE      — [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL], for Shop/Equip screens
- *   DEFAULT_OWNED_IDS   — starter-unlocked item ids (new players own these before earning credits)
+ *   ALL_EQUIPPABLE                — [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL], for Shop/Equip screens
+ *   DEFAULT_OWNED_IDS             — starter-unlocked item ids (computed, see below)
+ *   WEAPON_ATTRIBUTE_RESTRICTIONS — { attribute: allowedSubtype[] }
+ *   getAllowedWeaponSubtypes(attribute) → string[] | null   (null = no restriction)
+ *
+ * ── Pricing ──────────────────────────────────────────────────────────────
+ *   Weapon price  = damage × ammo + (200 × range)
+ *   Defense price = defense × durability          (armor pieces)
+ *   Heal price    = healAmount × 3                (medkits/syringes/bandages — defense is 0,
+ *                                                   so the armor formula doesn't apply; this is
+ *                                                   a judgment-call fallback, easy to change)
+ *   Prices are computed from the formula rather than hardcoded, so they always match the stats.
  *
  * ── Equip slots ──────────────────────────────────────────────────────────
- * Every equippable item now carries a `slot` field:
+ * Every equippable item carries a `slot` field:
  *   'hand'  (×2, flexible)  — weapons, shields, healing items — chosen pre-match, becomes starting hand
  *   'head'  (×1)  — helmets, masks, goggles — passive, pre-equipped into *InPlay at match start
  *   'chest' (×1)  — vests, plate armor, jacket — passive, pre-equipped
  *   'legs'  (×1)  — pants/leggings — passive, pre-equipped
  *   'feet'  (×1)  — boots/sneakers — passive, pre-equipped
  *   'arm'   (×2)  — elbow pads, sleeves, gauntlets — passive, pre-equipped
- * All slot items (except hand-slot weapons) share the DEFENSE_POOL shape, so they
- * plug directly into the existing armor-resolution logic in combat.js with no
- * extra code — anything type:'defense' sitting in *InPlay contributes automatically.
+ * All slot items (except hand-slot weapons) share the DEFENSE_POOL shape, so they plug directly
+ * into the existing armor-resolution logic in combat.js — and are subject to the SAME "2 equipped
+ * defense items max" rule already enforced in-match (see game-state.js playerPlayCard). The Equip
+ * screen enforces this too — see equip.js.
+ *
+ * ── Weapon restrictions ────────────────────────────────────────────────────
+ * Some characters can only ever fire certain weapon subtypes (mirrors the existing in-match
+ * checks in game-state.js/render.js isCardPlayable). The Equip screen uses
+ * getAllowedWeaponSubtypes() to hide/grey out weapons a character isn't allowed to equip
+ * (e.g. Lunging Logan can't take a gun into a hand slot — melee only).
  */
 
 'use strict';
@@ -29,133 +46,158 @@ const PHASES = ['fast', 'medium', 'slow', 'charged'];
 
 // ── Weapon cards (30) ───────────────────────────────────────────────────────
 // All weapons live in the 2 flexible HAND slots (see GEAR_POOL for body slots).
-const WEAPON_POOL = [
+const WEAPON_POOL_BASE = [
   // Pistols (range 1)
-  { id: 'w1', name: 'Desert Eagle', type: 'weapon', subtype: 'pistol', damage: 42, ammo: 7, speed: 'medium', range: 1, icon: '🔫', slot: 'hand', price: 130 },
-  { id: 'w2', name: 'Glock 18', type: 'weapon', subtype: 'pistol', damage: 18, ammo: 18, speed: 'fast', range: 1, icon: '🔫', slot: 'hand', price: 60 },
-  { id: 'w3', name: 'Magnum .357', type: 'weapon', subtype: 'revolver', damage: 35, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand', price: 110 },
-  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 15, speed: 'fast', range: 1, icon: '🔫', slot: 'hand', price: 65 },
-  { id: 'w5', name: 'Magnum .44', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 4, speed: 'slow', range: 1, icon: '🔫', slot: 'hand', price: 120 },
+  { id: 'w1', name: 'Desert Eagle', type: 'weapon', subtype: 'pistol', damage: 42, ammo: 7, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w2', name: 'Glock 18', type: 'weapon', subtype: 'pistol', damage: 18, ammo: 18, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w3', name: 'Magnum .357', type: 'weapon', subtype: 'revolver', damage: 35, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 15, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w5', name: 'Magnum .44', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 4, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   // Shotguns (range 1)
-  { id: 'w6', name: 'SPAS-12', type: 'weapon', subtype: 'shotgun', damage: 64, ammo: 5, speed: 'slow', range: 1, icon: '🪃', slot: 'hand', price: 190 },
-  { id: 'w7', name: 'Mossberg 500', type: 'weapon', subtype: 'shotgun', damage: 56, ammo: 4, speed: 'slow', range: 1, icon: '🪃', slot: 'hand', price: 170 },
-  { id: 'w8', name: 'AA-12 Auto', type: 'weapon', subtype: 'shotgun', damage: 38, ammo: 8, speed: 'medium', range: 1, icon: '🪃', slot: 'hand', price: 115 },
+  { id: 'w6', name: 'SPAS-12', type: 'weapon', subtype: 'shotgun', damage: 64, ammo: 5, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w7', name: 'Mossberg 500', type: 'weapon', subtype: 'shotgun', damage: 56, ammo: 4, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w8', name: 'AA-12 Auto', type: 'weapon', subtype: 'shotgun', damage: 38, ammo: 8, speed: 'medium', range: 1, icon: '🪃', slot: 'hand' },
   // Assault Rifles (range 2)
-  { id: 'w9', name: 'M4A1', type: 'weapon', subtype: 'assault_rifle', damage: 34, ammo: 10, speed: 'medium', range: 2, icon: '🎯', slot: 'hand', price: 105 },
-  { id: 'w10', name: 'AK-47', type: 'weapon', subtype: 'assault_rifle', damage: 47, ammo: 12, speed: 'slow', range: 2, icon: '🎯', slot: 'hand', price: 145 },
-  { id: 'w11', name: 'SCAR-H', type: 'weapon', subtype: 'assault_rifle', damage: 44, ammo: 7, speed: 'medium', range: 2, icon: '🎯', slot: 'hand', price: 135 },
-  { id: 'w12', name: 'Honey Badger', type: 'weapon', subtype: 'assault_rifle', damage: 32, ammo: 12, speed: 'fast', range: 2, icon: '🎯', slot: 'hand', price: 100 },
+  { id: 'w9', name: 'M4A1', type: 'weapon', subtype: 'assault_rifle', damage: 34, ammo: 10, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w10', name: 'AK-47', type: 'weapon', subtype: 'assault_rifle', damage: 47, ammo: 12, speed: 'slow', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w11', name: 'SCAR-H', type: 'weapon', subtype: 'assault_rifle', damage: 44, ammo: 7, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w12', name: 'Honey Badger', type: 'weapon', subtype: 'assault_rifle', damage: 32, ammo: 12, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
   // Sniper Rifles (range 3)
-  { id: 'w13', name: 'Barrett M82', type: 'weapon', subtype: 'sniper', damage: 82, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand', price: 250 },
-  { id: 'w14', name: 'Dragunov SVD', type: 'weapon', subtype: 'sniper', damage: 67, ammo: 5, speed: 'slow', range: 3, icon: '🎯', slot: 'hand', price: 205 },
-  { id: 'w15', name: 'AWP', type: 'weapon', subtype: 'sniper', damage: 92, ammo: 3, speed: 'charged', range: 3, icon: '🎯', slot: 'hand', price: 280 },
-  { id: 'w16', name: 'Intervention', type: 'weapon', subtype: 'sniper', damage: 76, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand', price: 230 },
+  { id: 'w13', name: 'Barrett M82', type: 'weapon', subtype: 'sniper', damage: 82, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w14', name: 'Dragunov SVD', type: 'weapon', subtype: 'sniper', damage: 67, ammo: 5, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w15', name: 'AWP', type: 'weapon', subtype: 'sniper', damage: 92, ammo: 3, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w16', name: 'Intervention', type: 'weapon', subtype: 'sniper', damage: 76, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
   // Grenades / Explosives (range 1)
-  { id: 'w17', name: 'Frag Grenade', type: 'weapon', subtype: 'explosive', damage: 60, ammo: 2, speed: 'slow', range: 1, icon: '💣', slot: 'hand', price: 180 },
-  { id: 'w18', name: 'Flashbang', type: 'weapon', subtype: 'explosive', damage: 30, ammo: 3, speed: 'fast', range: 1, icon: '💣', slot: 'hand', price: 90 },
-  { id: 'w19', name: 'Smoke Bomb', type: 'weapon', subtype: 'explosive', damage: 20, ammo: 4, speed: 'fast', range: 1, icon: '💣', slot: 'hand', price: 60 },
-  { id: 'w20', name: 'Sticky Bomb', type: 'weapon', subtype: 'explosive', damage: 75, ammo: 2, speed: 'charged', range: 1, icon: '💣', slot: 'hand', price: 225 },
+  { id: 'w17', name: 'Frag Grenade', type: 'weapon', subtype: 'explosive', damage: 60, ammo: 2, speed: 'slow', range: 1, icon: '💣', slot: 'hand' },
+  { id: 'w18', name: 'Flashbang', type: 'weapon', subtype: 'explosive', damage: 30, ammo: 3, speed: 'fast', range: 1, icon: '💣', slot: 'hand' },
+  { id: 'w19', name: 'Smoke Bomb', type: 'weapon', subtype: 'explosive', damage: 20, ammo: 4, speed: 'fast', range: 1, icon: '💣', slot: 'hand' },
+  { id: 'w20', name: 'Sticky Bomb', type: 'weapon', subtype: 'explosive', damage: 75, ammo: 2, speed: 'charged', range: 1, icon: '💣', slot: 'hand' },
   // Missile / Heavy (range 2)
-  { id: 'w21', name: 'RPG-7', type: 'weapon', subtype: 'missile', damage: 100, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand', price: 300 },
-  { id: 'w22', name: 'Stinger SAM', type: 'weapon', subtype: 'missile', damage: 85, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand', price: 255 },
-  { id: 'w23', name: 'Javelin', type: 'weapon', subtype: 'missile', damage: 115, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand', price: 345 },
+  { id: 'w21', name: 'RPG-7', type: 'weapon', subtype: 'missile', damage: 100, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand' },
+  { id: 'w22', name: 'Stinger SAM', type: 'weapon', subtype: 'missile', damage: 85, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand' },
+  { id: 'w23', name: 'Javelin', type: 'weapon', subtype: 'missile', damage: 115, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand' },
   // Melee (range 0)
-  { id: 'w24', name: 'Combat Knife', type: 'weapon', subtype: 'melee', damage: 30, ammo: 8, speed: 'fast', range: 0, icon: '🗡️', slot: 'hand', price: 90 },
-  { id: 'w25', name: 'War Hammer', type: 'weapon', subtype: 'melee', damage: 60, ammo: 4, speed: 'slow', range: 0, icon: '⚔️', slot: 'hand', price: 180 },
-  { id: 'w26', name: 'Katana', type: 'weapon', subtype: 'melee', damage: 56, ammo: 6, speed: 'medium', range: 0, icon: '⚔️', slot: 'hand', price: 170 },
-  { id: 'w27', name: 'Chainsaw', type: 'weapon', subtype: 'melee', damage: 75, ammo: 3, speed: 'slow', range: 0, icon: '⚙️', slot: 'hand', price: 225 },
-  { id: 'w28', name: 'Shock Baton', type: 'weapon', subtype: 'melee', damage: 25, ammo: 10, speed: 'fast', range: 0, icon: '⚡', slot: 'hand', price: 75 },
-  { id: 'w29', name: 'Plasma Blade', type: 'weapon', subtype: 'melee', damage: 50, ammo: 5, speed: 'medium', range: 0, icon: '⚡', slot: 'hand', price: 150 },
-  { id: 'w30', name: 'Uzi', type: 'weapon', subtype: 'pistol', damage: 23, ammo: 21, speed: 'fast', range: 1, icon: '🔫', slot: 'hand', price: 70 },
+  { id: 'w24', name: 'Combat Knife', type: 'weapon', subtype: 'melee', damage: 30, ammo: 8, speed: 'fast', range: 0, icon: '🗡️', slot: 'hand' },
+  { id: 'w25', name: 'War Hammer', type: 'weapon', subtype: 'melee', damage: 60, ammo: 4, speed: 'slow', range: 0, icon: '⚔️', slot: 'hand' },
+  { id: 'w26', name: 'Katana', type: 'weapon', subtype: 'melee', damage: 56, ammo: 6, speed: 'medium', range: 0, icon: '⚔️', slot: 'hand' },
+  { id: 'w27', name: 'Chainsaw', type: 'weapon', subtype: 'melee', damage: 75, ammo: 3, speed: 'slow', range: 0, icon: '⚙️', slot: 'hand' },
+  { id: 'w28', name: 'Shock Baton', type: 'weapon', subtype: 'melee', damage: 25, ammo: 10, speed: 'fast', range: 0, icon: '⚡', slot: 'hand' },
+  { id: 'w29', name: 'Plasma Blade', type: 'weapon', subtype: 'melee', damage: 50, ammo: 5, speed: 'medium', range: 0, icon: '⚡', slot: 'hand' },
+  { id: 'w30', name: 'Uzi', type: 'weapon', subtype: 'pistol', damage: 23, ammo: 21, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
 ];
+const WEAPON_POOL = WEAPON_POOL_BASE.map(w => ({ ...w, price: w.damage * w.ammo + 200 * w.range }));
 
 // ── Defense cards (30) ──────────────────────────────────────────────────────
 // Armor effectiveness:
-//   vest         → pistol, assault_rifle, shotgun
-//   helmet       → sniper
-//   blast_armor  → explosive, missile
-//   plate_armor  → all
-//   medkit / syringe / bandage / ointment → heal (healAmount > 0, no defense)
-const DEFENSE_POOL = [
-  // Bullet Proof Vests → CHEST slot
-  { id: 'd1', name: 'Kevlar Vest', type: 'defense', subtype: 'vest', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest', price: 120 },
-  { id: 'd2', name: 'Tactical Vest', type: 'defense', subtype: 'vest', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest', price: 150 },
-  { id: 'd3', name: 'Riot Vest', type: 'defense', subtype: 'vest', defense: 30, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest', price: 110 },
-  { id: 'd4', name: 'Nano Vest', type: 'defense', subtype: 'vest', defense: 60, durability: 2, maxDurability: 2, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest', price: 140 },
-  // Helmets (effective vs sniper) → HEAD slot
-  { id: 'd5', name: 'Combat Helmet', type: 'defense', subtype: 'helmet', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head', price: 130 },
-  { id: 'd6', name: 'Ballistic Helm', type: 'defense', subtype: 'helmet', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head', price: 155 },
-  { id: 'd7', name: 'Full Face Guard', type: 'defense', subtype: 'helmet', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head', price: 115 },
-  { id: 'd8', name: 'Exo Helm', type: 'defense', subtype: 'helmet', defense: 65, durability: 2, maxDurability: 2, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head', price: 145 },
-  // Blast Armor (effective vs explosive, missile) → CHEST slot
-  { id: 'd9', name: 'Blast Suit', type: 'defense', subtype: 'blast_armor', defense: 60, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest', price: 175 },
-  { id: 'd10', name: 'EOD Gear', type: 'defense', subtype: 'blast_armor', defense: 70, durability: 2, maxDurability: 2, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest', price: 180 },
-  { id: 'd11', name: 'Blast Plate', type: 'defense', subtype: 'blast_armor', defense: 50, durability: 4, maxDurability: 4, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest', price: 165 },
-  { id: 'd12', name: 'Demo Shield', type: 'defense', subtype: 'blast_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest', price: 130 },
-  // Plate Armor (general — effective vs all) → CHEST slot
-  { id: 'd13', name: 'Steel Plate', type: 'defense', subtype: 'plate_armor', defense: 30, durability: 5, maxDurability: 5, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest', price: 160 },
-  { id: 'd14', name: 'Titanium Plate', type: 'defense', subtype: 'plate_armor', defense: 40, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest', price: 175 },
-  { id: 'd15', name: 'Dragon Scale', type: 'defense', subtype: 'plate_armor', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest', price: 185 },
-  // Riot Shield / Energy Shield — held, not worn → HAND slot
-  { id: 'd16', name: 'Riot Shield', type: 'defense', subtype: 'plate_armor', defense: 35, durability: 6, maxDurability: 6, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'hand', price: 200 },
-  // Melee-specific armor → CHEST slot
-  { id: 'd17', name: 'Chain Mail', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest', price: 165 },
-  { id: 'd18', name: 'Spike Guard', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest', price: 135 },
-  // Healing items (one-time use, defense: 0) → HAND slot (carried & used)
-  { id: 'd19', name: 'Med Kit', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 50, icon: '🏥', slot: 'hand', price: 150 },
-  { id: 'd20', name: 'Med Kit II', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 40, icon: '🏥', slot: 'hand', price: 120 },
-  { id: 'd21', name: 'Syringe', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 30, icon: '💉', slot: 'hand', price: 90 },
-  { id: 'd22', name: 'Adrenaline Shot', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 25, icon: '💉', slot: 'hand', price: 75 },
-  { id: 'd23', name: 'Bandages', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 20, icon: '🩹', slot: 'hand', price: 60 },
-  { id: 'd24', name: 'Field Dressing', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 15, icon: '🩹', slot: 'hand', price: 45 },
-  { id: 'd25', name: 'Ointment', type: 'defense', subtype: 'ointment', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 12, icon: '🧴', slot: 'hand', price: 36 },
-  { id: 'd26', name: 'Combat Stim', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 35, icon: '💉', slot: 'hand', price: 105 },
-  // More armors → CHEST slot
-  { id: 'd27', name: 'Exo Suit', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🤖', slot: 'chest', price: 190 },
-  // Energy Shield — held, not worn → HAND slot
-  { id: 'd28', name: 'Energy Shield', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔵', slot: 'hand', price: 210 },
-  { id: 'd29', name: 'Ceramic Plate', type: 'defense', subtype: 'vest', defense: 38, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest', price: 115 },
-  { id: 'd30', name: 'Carbon Weave', type: 'defense', subtype: 'blast_armor', defense: 42, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest', price: 140 },
+//   vest         → pistol, assault_rifle, shotgun     (slot: chest)
+//   helmet       → sniper                             (slot: head)
+//   blast_armor  → explosive, missile                 (slot: chest)
+//   plate_armor  → all                                (slot: chest, except the 2 named "Shield"
+//                                                        items below, which are hand-held)
+//   medkit / syringe / bandage / ointment → heal (healAmount > 0, no defense) (slot: hand)
+const DEFENSE_POOL_BASE = [
+  // Bullet Proof Vests → CHEST
+  { id: 'd1', name: 'Kevlar Vest', type: 'defense', subtype: 'vest', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  { id: 'd2', name: 'Tactical Vest', type: 'defense', subtype: 'vest', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  { id: 'd3', name: 'Riot Vest', type: 'defense', subtype: 'vest', defense: 30, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  { id: 'd4', name: 'Nano Vest', type: 'defense', subtype: 'vest', defense: 60, durability: 2, maxDurability: 2, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  // Helmets → HEAD
+  { id: 'd5', name: 'Combat Helmet', type: 'defense', subtype: 'helmet', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
+  { id: 'd6', name: 'Ballistic Helm', type: 'defense', subtype: 'helmet', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
+  { id: 'd7', name: 'Full Face Guard', type: 'defense', subtype: 'helmet', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
+  { id: 'd8', name: 'Exo Helm', type: 'defense', subtype: 'helmet', defense: 65, durability: 2, maxDurability: 2, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
+  // Blast Armor → CHEST
+  { id: 'd9', name: 'Blast Suit', type: 'defense', subtype: 'blast_armor', defense: 60, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest' },
+  { id: 'd10', name: 'EOD Gear', type: 'defense', subtype: 'blast_armor', defense: 70, durability: 2, maxDurability: 2, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest' },
+  { id: 'd11', name: 'Blast Plate', type: 'defense', subtype: 'blast_armor', defense: 50, durability: 4, maxDurability: 4, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest' },
+  { id: 'd12', name: 'Demo Shield', type: 'defense', subtype: 'blast_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest' },
+  // Plate Armor → CHEST
+  { id: 'd13', name: 'Steel Plate', type: 'defense', subtype: 'plate_armor', defense: 30, durability: 5, maxDurability: 5, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
+  { id: 'd14', name: 'Titanium Plate', type: 'defense', subtype: 'plate_armor', defense: 40, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
+  { id: 'd15', name: 'Dragon Scale', type: 'defense', subtype: 'plate_armor', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
+  // Riot Shield — held, not worn → HAND
+  { id: 'd16', name: 'Riot Shield', type: 'defense', subtype: 'plate_armor', defense: 35, durability: 6, maxDurability: 6, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔰', slot: 'hand' },
+  // Melee-specific armor → CHEST
+  { id: 'd17', name: 'Chain Mail', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest' },
+  { id: 'd18', name: 'Spike Guard', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest' },
+  // Healing items (one-time use, defense: 0) → HAND
+  { id: 'd19', name: 'Med Kit', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 50, icon: '🏥', slot: 'hand' },
+  { id: 'd20', name: 'Med Kit II', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 40, icon: '🏥', slot: 'hand' },
+  { id: 'd21', name: 'Syringe', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 30, icon: '💉', slot: 'hand' },
+  { id: 'd22', name: 'Adrenaline Shot', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 25, icon: '💉', slot: 'hand' },
+  { id: 'd23', name: 'Bandages', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 20, icon: '🩹', slot: 'hand' },
+  { id: 'd24', name: 'Field Dressing', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 15, icon: '🩹', slot: 'hand' },
+  { id: 'd25', name: 'Ointment', type: 'defense', subtype: 'ointment', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 12, icon: '🧴', slot: 'hand' },
+  { id: 'd26', name: 'Combat Stim', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 35, icon: '💉', slot: 'hand' },
+  // More armors → CHEST
+  { id: 'd27', name: 'Exo Suit', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🤖', slot: 'chest' },
+  // Energy Shield — held, not worn → HAND
+  { id: 'd28', name: 'Energy Shield', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'missile', 'melee'], healAmount: 0, icon: '🔵', slot: 'hand' },
+  { id: 'd29', name: 'Ceramic Plate', type: 'defense', subtype: 'vest', defense: 38, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  { id: 'd30', name: 'Carbon Weave', type: 'defense', subtype: 'blast_armor', defense: 42, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🦺', slot: 'chest' },
 ];
+const DEFENSE_POOL = DEFENSE_POOL_BASE.map(d => ({ ...d, price: d.healAmount > 0 ? d.healAmount * 3 : d.defense * d.durability }));
 
 // ── Gear cards (head/legs/feet/arms — the 6 fixed equip slots) ─────────────
 // Same shape as DEFENSE_POOL so they plug straight into the existing armor-
-// resolution logic in combat.js (applyPlayerArmor/applyBotArmor) with zero
-// extra code — any type:'defense' item sitting in *InPlay contributes.
-const GEAR_POOL = [
+// resolution logic in combat.js (applyPlayerArmor/applyBotArmor) with zero extra code.
+const GEAR_POOL_BASE = [
   // Head — helmets live in DEFENSE_POOL; these are the other head slot options
-  { id: 'g1', name: 'Hard Hat', type: 'defense', subtype: 'gear_head', defense: 25, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '⛑️', slot: 'head', price: 85 },
-  { id: 'g2', name: 'Face Mask', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['pistol'], healAmount: 0, icon: '😷', slot: 'head', price: 70 },
-  { id: 'g3', name: 'Gas Mask', type: 'defense', subtype: 'gear_head', defense: 30, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🥽', slot: 'head', price: 100 },
-  { id: 'g4', name: 'Night Vision Goggles', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head', price: 160 },
+  { id: 'g1', name: 'Hard Hat', type: 'defense', subtype: 'gear_head', defense: 25, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '⛑️', slot: 'head' },
+  { id: 'g2', name: 'Face Mask', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['pistol'], healAmount: 0, icon: '😷', slot: 'head' },
+  { id: 'g3', name: 'Gas Mask', type: 'defense', subtype: 'gear_head', defense: 30, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🥽', slot: 'head' },
+  { id: 'g4', name: 'Night Vision Goggles', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head' },
   // Chest — Jacket (carries extra items: +1 max hand size, see getMaxHandSize)
-  { id: 'g5', name: 'Field Jacket', type: 'defense', subtype: 'gear_chest', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest', price: 175, carryBonus: 1 },
+  { id: 'g5', name: 'Field Jacket', type: 'defense', subtype: 'gear_chest', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest', carryBonus: 1 },
   // Legs
-  { id: 'g6', name: 'Cargo Pants', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '👖', slot: 'legs', price: 70 },
-  { id: 'g7', name: 'Padded Leggings', type: 'defense', subtype: 'gear_legs', defense: 25, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🩳', slot: 'legs', price: 105 },
-  { id: 'g8', name: 'Battle Pants', type: 'defense', subtype: 'gear_legs', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '👖', slot: 'legs', price: 140 },
+  { id: 'g6', name: 'Cargo Pants', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '👖', slot: 'legs' },
+  { id: 'g7', name: 'Padded Leggings', type: 'defense', subtype: 'gear_legs', defense: 25, durability: 3, maxDurability: 3, effectiveVs: ['explosive', 'missile'], healAmount: 0, icon: '🩳', slot: 'legs' },
+  { id: 'g8', name: 'Battle Pants', type: 'defense', subtype: 'gear_legs', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '👖', slot: 'legs' },
   // Feet
-  { id: 'g9', name: 'Sneakers', type: 'defense', subtype: 'gear_feet', defense: 8, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '👟', slot: 'feet', price: 40 },
-  { id: 'g10', name: 'Combat Boots', type: 'defense', subtype: 'gear_feet', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🥾', slot: 'feet', price: 90 },
-  { id: 'g11', name: 'Steel-Toe Boots', type: 'defense', subtype: 'gear_feet', defense: 28, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'explosive'], healAmount: 0, icon: '🥾', slot: 'feet', price: 125 },
+  { id: 'g9', name: 'Sneakers', type: 'defense', subtype: 'gear_feet', defense: 8, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '👟', slot: 'feet' },
+  { id: 'g10', name: 'Combat Boots', type: 'defense', subtype: 'gear_feet', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🥾', slot: 'feet' },
+  { id: 'g11', name: 'Steel-Toe Boots', type: 'defense', subtype: 'gear_feet', defense: 28, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'explosive'], healAmount: 0, icon: '🥾', slot: 'feet' },
   // Arms (worn — separate from the flexible hand slots)
-  { id: 'g12', name: 'Elbow Pads', type: 'defense', subtype: 'gear_arm', defense: 12, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '💪', slot: 'arm', price: 55 },
-  { id: 'g13', name: 'Tactical Sleeves', type: 'defense', subtype: 'gear_arm', defense: 18, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle'], healAmount: 0, icon: '💪', slot: 'arm', price: 85 },
-  { id: 'g14', name: 'Gauntlets', type: 'defense', subtype: 'gear_arm', defense: 26, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'shotgun'], healAmount: 0, icon: '🧤', slot: 'arm', price: 120 },
+  { id: 'g12', name: 'Elbow Pads', type: 'defense', subtype: 'gear_arm', defense: 12, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '💪', slot: 'arm' },
+  { id: 'g13', name: 'Tactical Sleeves', type: 'defense', subtype: 'gear_arm', defense: 18, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle'], healAmount: 0, icon: '💪', slot: 'arm' },
+  { id: 'g14', name: 'Gauntlets', type: 'defense', subtype: 'gear_arm', defense: 26, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'shotgun'], healAmount: 0, icon: '🧤', slot: 'arm' },
 ];
+const GEAR_POOL = GEAR_POOL_BASE.map(g => ({ ...g, price: g.defense * g.durability }));
 
 // Every equippable item across all three pools, for the Shop and Equip screens.
 const ALL_EQUIPPABLE = [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL];
 
-// Items every new player already owns (so the Equip screen isn't empty at 0 credits).
-// Cheap starter pick from every slot.
-const DEFAULT_OWNED_IDS = [
-  'w2', 'w4', 'w24', 'w28', 'w30',      // starter hand weapons (cheap pistols/melee)
-  'd21', 'd23', 'd25',                  // starter hand consumables
-  'd1', 'd3', 'd29',                    // starter chest vests
-  'd5', 'd7', 'g2',                     // starter head
-  'g6', 'g9', 'g12',                    // starter legs/feet/arms
-];
+// ── Weapon restrictions (mirrors the in-match checks in game-state.js) ─────
+const WEAPON_ATTRIBUTE_RESTRICTIONS = {
+  dual_wield: ['pistol', 'revolver'],           // Pistol Pete
+  deadeye: ['revolver', 'pistol'],              // Cowboy Clint
+  pistol_specialist: ['pistol'],
+  revolver_specialist: ['revolver'],
+  swift_melee: ['melee'],                       // Lunging Logan — can't wield a gun
+  rifle_specialist: ['assault_rifle', 'sniper'], // Ranger Kate
+};
+/** Returns the allowed weapon subtypes for a character attribute, or null if unrestricted. */
+function getAllowedWeaponSubtypes(attribute) {
+  return WEAPON_ATTRIBUTE_RESTRICTIONS[attribute] || null;
+}
+
+// ── Default starter-owned items ─────────────────────────────────────────────
+// Combat Knife + M9 are always owned (fixed starters), plus the single cheapest
+// item in each of the other equip-slot categories (computed from price, not
+// hardcoded, so it stays correct if prices/items change).
+const DEFAULT_OWNED_IDS = (function () {
+  const fixed = ['w24', 'w4']; // Combat Knife, M9
+  const slotCategories = ['head', 'chest', 'legs', 'feet', 'arm'];
+  const cheapestPerSlot = slotCategories.map(slot => {
+    const items = ALL_EQUIPPABLE.filter(i => i.slot === slot);
+    return items.reduce((min, i) => (i.price < min.price ? i : min), items[0]).id;
+  });
+  // Cheapest hand-slot item that ISN'T a weapon (a shield or healing item) —
+  // gives new players something non-lethal to work with in that slot too.
+  const handNonWeapon = ALL_EQUIPPABLE.filter(i => i.slot === 'hand' && i.type !== 'weapon');
+  const cheapestHandGear = handNonWeapon.reduce((min, i) => (i.price < min.price ? i : min), handNonWeapon[0]).id;
+  return [...fixed, ...cheapestPerSlot, cheapestHandGear];
+})();
 
 // ── Character cards (16: 8 heroes, 8 villains) ──────────────────────────────
 const CHARACTER_POOL = [
@@ -175,7 +217,7 @@ const CHARACTER_POOL = [
   { id: 'c8', name: 'The Shadow', type: 'character', faction: 'villain', hp: 1, maxHp: 1, speed: 0, attribute: 'shadow_clone', attrDesc: 'Mirrors the hero · Turn always last', icon: '🥷', img: 'img/char/the_shadow.jpeg' },
   { id: 'c9', name: 'Cowboy Clint', type: 'character', faction: 'villain', hp: 160, maxHp: 160, speed: 9, attribute: 'deadeye', attrDesc: 'Fire Revolvers faster · Revolvers & Pistols only', icon: '🤠', img: 'img/char/cowboy_clint.png' },
   { id: 'c12', name: 'Huntress Hellena', type: 'character', faction: 'villain', hp: 200, maxHp: 200, speed: 5, attribute: 'sniper_specialist', attrDesc: 'Sniper+33% dmg · Move Fast & Medium only', icon: '🎯', img: 'img/char/huntress_hellena.png' },
-  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'X-Ray: reveal hidden card · -1 SPD per card equipped', icon: '🧠', img: 'img/char/tactical_tim.png' },
+  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'Radar: ping enemy direction & range · -1 SPD per card equipped', icon: '🧠', img: 'img/char/tactical_tim.png' },
   { id: 'c15', name: 'Hank the Tank', type: 'character', faction: 'villain', hp: 220, maxHp: 220, speed: 3, attribute: 'explosive_specialist', attrDesc: 'Explosive +40% dmg · Too slow for Fast phase', icon: '💥', img: 'img/char/hank_the_tank.png' },
 ];
 

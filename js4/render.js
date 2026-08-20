@@ -114,11 +114,9 @@ function hpBarColor(pct) {
         return dist <= card.range;
       }
       if (card.type === 'defense') {
-        // extra_carry (Tracy Guns): weapons only, no exceptions.
-        // dual_wield (Pete): both hands full of pistols — armor is locked, but
-        // healing items don't need a free hand, so those are still allowed.
+        // extra_carry (Tracy Guns) and dual_wield (Pete) cannot use defense cards
         if (G.playerChar.attribute === 'extra_carry') return false;
-        if (G.playerChar.attribute === 'dual_wield' && card.healAmount === 0) return false;
+        if (G.playerChar.attribute === 'dual_wield') return false;
         if (card.healAmount > 0) {
           return G.playerChar.hp < G.playerChar.maxHp &&
             G.playerChar.hp + card.healAmount <= G.playerChar.maxHp;
@@ -131,11 +129,8 @@ function hpBarColor(pct) {
     function renderPlayerCards() {
       const el = document.getElementById('player-all-cards'); if (!el) return;
       el.innerHTML = '';
-      // Equipped weapons float to the top, then equipped defense, then hand cards —
-      // keeps the active loadout visually up front regardless of pickup order.
       const allCards = [
-        ...G.playerInPlay.filter(c => c.type === 'weapon').map(c => ({ card: c, inPlay: true })),
-        ...G.playerInPlay.filter(c => c.type === 'defense').map(c => ({ card: c, inPlay: true })),
+        ...G.playerInPlay.map(c => ({ card: c, inPlay: true })),
         ...G.playerHand.map(c => ({ card: c, inPlay: false }))
       ];
       for (const { card, inPlay } of allCards) {
@@ -383,30 +378,14 @@ function hpBarColor(pct) {
           const pHere = G.playerPos === idx;
           const bHere = G.botPos === idx;
           const dist = getDistance(G.playerPos, idx);
-          // Fog of war only applies on Hard & Impossible — on Easy & Medium the whole
-          // arena (including the bot's position) is always visible.
-          //   Hard:       1-tile radius around the player, AND once a tile has been
-          //               explored it stays revealed for the rest of the match (memory).
-          //   Impossible: only the exact tile the player is standing on — no radius,
-          //               no memory. The harshest visibility in the game.
-          // The bot only appears within that same live radius, or briefly while a
-          // Radar ping (Tactical Tim) has located it — Night Vision Goggles do NOT
-          // reveal the bot, only the terrain (see below).
-          const fogEnabled = G.difficulty === 'hard' || G.difficulty === 'impossible';
-          const fogRadius = G.difficulty === 'impossible' ? 0 : 1;
-          const permanentlyKnown = fogEnabled && G.difficulty === 'hard' && !!(G.revealedTiles && G.revealedTiles.has(idx));
-          const revealed = !fogEnabled || dist <= fogRadius || permanentlyKnown || (bHere && G.radarPingActive);
+          // Fog of war: only the player's own tile and its immediate (1-tile)
+          // radius are visible — this is live, not permanent, so tiles go
+          // dark again once the player moves away. The bot only appears when
+          // it's standing within that same radius, or briefly while a Radar
+          // ping (Tactical Tim) has located it.
+          const revealed = dist <= 1 || (bHere && G.radarPingActive);
           const botVisible = bHere && revealed;
-
-          // Night Vision Goggles (head gear, nightVision:true) — always shows the map's
-          // terrain in a translucent green tint, even where fog would normally hide it.
-          // Doesn't reveal the bot itself, just the layout.
-          const hasNightVision = fogEnabled && G.playerInPlay.some(c => c.nightVision);
-          const nvgOnly = hasNightVision && !revealed;
-          const showTerrain = revealed || hasNightVision;
-
-          if (!showTerrain) tile.classList.add('fogged');
-          else if (nvgOnly) tile.classList.add('nvg-tile');
+          if (!revealed) tile.classList.add('fogged');
           if (pHere && botVisible) tile.classList.add('both-here');
           else if (pHere) tile.classList.add('player-here');
           else if (botVisible) tile.classList.add('bot-here');
@@ -428,8 +407,8 @@ function hpBarColor(pct) {
           ${botVisible ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
         </div>
         ${showRangePreview && botVisible ? '<div class="weapon-bullseye">🎯</div>' : ''}
-        <div class="loc-name">${showTerrain ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
-        <div class="loc-effect ${showTerrain ? loc.css : ''}">${showTerrain ? loc.effectDesc : ''}</div>
+        <div class="loc-name">${revealed ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
+        <div class="loc-effect ${revealed ? loc.css : ''}">${revealed ? loc.effectDesc : ''}</div>
         <div class="loc-dist">${dist > 0 ? dist + 'sp' : ''}</div>
       `;
           if (G.awaitingMove) {

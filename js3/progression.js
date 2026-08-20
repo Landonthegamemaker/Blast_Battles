@@ -5,26 +5,18 @@
  * so localStorage is the only persistence option available).
  *
  * Exports (browser globals):
- *   getCredits()                     → number
- *   addCredits(amount, reason?)      → new balance (also logs to console)
- *   isOwned(itemId)                  → boolean
- *   buyItem(itemId)                  → { ok: boolean, reason?: string }
- *   awardMatchCredits(battleScore)   → number credits awarded (can be negative — see below)
- *   resetProgression()               → wipes credits/ownership back to defaults (debug/testing)
- *
- * ── Credit formula ──────────────────────────────────────────────────────
- * creditsEarned = round(100 × battleScore)
- * `battleScore` is the same tanh(net dmg)+survivability number already shown on the
- * end-game modal (see computeBattleScore() in combat.js) — so credits scale with how
- * well the match actually went, not just win/loss. An immediate retreat carries the
- * full early-exit penalty baked into that score, which works out to roughly -$50.
- * Balance is clamped at 0 — a bad enough result can't push you into debt.
+ *   getCredits()                    → number
+ *   addCredits(amount, reason?)     → new balance (also logs to console)
+ *   isOwned(itemId)                 → boolean
+ *   buyItem(itemId)                 → { ok: boolean, reason?: string }
+ *   awardMatchCredits(winner)       → number credits awarded (winner: 'player'|'bot'|'draw'|'retreat')
+ *   resetProgression()              → wipes credits/ownership back to defaults (debug/testing)
  */
 'use strict';
 
 const CREDITS_KEY = 'bb-credits';
 const OWNED_KEY = 'bb-owned';
-const STARTING_CREDITS = 100;
+const STARTING_CREDITS = 400;
 
 function _loadOwned() {
   try {
@@ -81,14 +73,14 @@ function buyItem(itemId) {
 }
 
 /**
- * Awards credits at the end of a match, scaled by the match's Battle Score.
- * @param {number} battleScore - The same score shown on the end-game modal
- *   (see computeBattleScore() in combat.js). Roughly -1.5 to +1.5.
- * @returns {number} credits awarded (may be negative; balance itself is clamped at 0)
+ * Awards credits at the end of a match. Flat, simple rewards — no formula needed.
+ * @param {'player'|'bot'|'draw'|'retreat'} winner
+ * @returns {number} credits awarded
  */
-function awardMatchCredits(battleScore) {
-  const amount = Math.round(100 * battleScore);
-  addCredits(amount, `battle score ${battleScore.toFixed(3)}`);
+function awardMatchCredits(winner) {
+  const rewards = { player: 150, draw: 75, bot: 50, retreat: 25 };
+  const amount = rewards[winner] ?? 50;
+  addCredits(amount, `match result: ${winner}`);
   return amount;
 }
 

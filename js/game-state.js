@@ -210,6 +210,7 @@ function initGame() {
     botInPlay: [],
     playerPos: 0,
     botPos: 48,
+    revealedTiles: new Set([0]),
     locations: locs,
     weaponDeck,
     defenseDeck,
