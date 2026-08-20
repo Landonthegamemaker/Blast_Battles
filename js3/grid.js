@@ -7,11 +7,9 @@
  *   getAdjacentIndices(pos)                → index[]
  *   rowOf(idx)                             → 0–6
  *   colOf(idx)                             → 0–6
- *   getReachable(pos, steps)               → index[]  (Chebyshev / king moves — legacy helper, no
- *                                                       longer used for movement; kept for reference)
+ *   getReachable(pos, steps)               → index[]  (Chebyshev / king moves)
  *   getReachableForChar(char, pos, steps)  → index[]  (character-specific movement)
- *   getDistance(a, b)                      → number   (Chebyshev distance — still used for weapon
- *                                                       range/line-of-sight; independent of movement)
+ *   getDistance(a, b)                      → number   (Chebyshev distance)
  *
  * Grid layout (row-major, index = row * 5 + col):
  *
@@ -24,22 +22,6 @@
  *   42 43 44 45 46 47 48
  *
  * Player starts at 0 (top-left), bot starts at 48 (bottom-right).
- *
- * ── Movement patterns ──────────────────────────────────────────────────────
- * "King's corner" (free diagonal) movement is disabled by default — no
- * character other than the ones listed below can step diagonally.
- *
- *   • default (most characters) — cardinal only (N/S/E/W), 1 tile per action.
- *   • swift (Sprinting Sue)     — cardinal only, up to `steps` tiles in a
- *                                 straight line (2 tiles during Fast phase).
- *   • healing (Macy the Medic)  — cardinal only, 1 tile (same as default —
- *                                 kept as its own branch for clarity/flavor).
- *   • swift_melee (Lunging Logan) — diagonal ONLY, 1 tile per action.
- *   • dodge_bullets (Agent Ace) — "Ace Pattern": knight-style hop (±1,±2 /
- *                                 ±2,±1), reflecting her evasive playstyle.
- *                                 This is a judgment call since "Ace Pattern"
- *                                 wasn't formally specified — easy to swap
- *                                 for a different shape if you have one in mind.
  */
 
 'use strict';
@@ -100,8 +82,16 @@ function getReachable(pos, steps) {
  * Character-aware movement — returns the tiles reachable by `char` from `pos`
  * in one move action, given the number of allowed `steps`.
  *
- * No character gets free diagonal ("king's corner") movement by default.
- * See the movement-patterns note in the file header for the full breakdown.
+ * Movement patterns:
+ *   • default (all characters) — cardinal rook: straight lines only, no
+ *     diagonals. This now includes healing (Macy the Medic) and swift_melee
+ *     (Lunging Logan) — every character moves along the grid's rows and
+ *     columns rather than cutting corners.
+ *
+ * Design notes:
+ *   - Cardinal-only movement keeps positioning readable at a glance — no more
+ *     surprise diagonal lunges into range.
+ *   - Guarantees every tile is reachable across multiple turns.
  *
  * @param {{ attribute: string }} char - Character object (only `.attribute` is read)
  * @param {number} pos   - Current tile index (0–48)
@@ -109,37 +99,8 @@ function getReachable(pos, steps) {
  * @returns {number[]}
  */
 function getReachableForChar(char, pos, steps) {
-  const attr = char.attribute;
+  // Cardinal moves only — exactly 1 axis changes, the other stays zero
   const pr = rowOf(pos), pc = colOf(pos);
-
-  // Lunging Logan — diagonal-only movement (bishop-style zig-zag pursuit).
-  if (attr === 'swift_melee') {
-    const result = [];
-    for (let i = 0; i < 49; i++) {
-      if (i === pos) continue;
-      const dr = rowOf(i) - pr, dc = colOf(i) - pc;
-      if (Math.abs(dr) === Math.abs(dc) && Math.abs(dr) > 0 && Math.abs(dr) <= steps) {
-        result.push(i);
-      }
-    }
-    return result;
-  }
-
-  // Agent Ace — "Ace Pattern": a knight-style hop, reflecting her evasive,
-  // hard-to-pin-down playstyle. (See file header — flag if you had a
-  // different shape in mind and it's an easy swap.)
-  if (attr === 'dodge_bullets') {
-    const offsets = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
-    const result = [];
-    for (const [dr, dc] of offsets) {
-      const r = pr + dr, c = pc + dc;
-      if (r >= 0 && r < 7 && c >= 0 && c < 7) result.push(r * 7 + c);
-    }
-    return result;
-  }
-
-  // Default (includes healing/Macy and swift/Sprinting Sue) — cardinal moves
-  // only, up to `steps` tiles in a straight line. No diagonals for anyone else.
   const result = [];
   for (let i = 0; i < 49; i++) {
     if (i === pos) continue;
@@ -168,4 +129,28 @@ function getDistance(a, b) {
     Math.abs(rowOf(a) - rowOf(b)),
     Math.abs(colOf(a) - colOf(b))
   );
+}
+
+/**
+ * Returns the tile indices forming a straight line-of-fire from `a` to `b`,
+ * stepping diagonally whenever both row and column still differ (king-move
+ * line), so the path length always equals `getDistance(a, b)`. The origin
+ * tile `a` is excluded; the destination tile `b` is included as the last
+ * entry. Used to highlight the shot's path between attacker and target
+ * rather than the weapon's entire range.
+ *
+ * @param {number} a - Origin tile index (0–48)
+ * @param {number} b - Destination tile index (0–48)
+ * @returns {number[]}
+ */
+function getLinePath(a, b) {
+  let r = rowOf(a), c = colOf(a);
+  const tr = rowOf(b), tc = colOf(b);
+  const path = [];
+  while (r !== tr || c !== tc) {
+    if (r < tr) r++; else if (r > tr) r--;
+    if (c < tc) c++; else if (c > tc) c--;
+    path.push(r * 7 + c);
+  }
+  return path;
 }

@@ -1,6 +1,5 @@
 /**
- * shop.js — Shop screen: spend credits earned from matches (via Battle Score) to unlock
- * new gear/weapons.
+ * shop.js — Shop screen: spend credits earned from matches to unlock new gear/weapons.
  * Dependencies (must load first): data.js (ALL_EQUIPPABLE), progression.js (getCredits/isOwned/buyItem)
  * Layers on top of whichever screen opened it (usually the Equip screen) — closing it
  * just hides the shop overlay and refreshes the screen underneath.
@@ -17,7 +16,6 @@ const SHOP_SLOT_LABELS = { all: 'All', hand: 'Hand', head: 'Head', chest: 'Chest
 
 function openShop() {
   _shopFilterSlot = 'all';
-  _setShopMsg('');
   _renderShopTabs();
   _renderShopGrid();
   document.getElementById('shop-overlay').classList.remove('hidden');
@@ -28,13 +26,8 @@ function closeShop() {
   const equipOverlay = document.getElementById('equip-overlay');
   if (equipOverlay && !equipOverlay.classList.contains('hidden')) {
     document.getElementById('equip-credits').textContent = `💰 ${getCredits()}`;
-    if (typeof _activeEquipSlot !== 'undefined' && _activeEquipSlot) openSlotPicker(_activeEquipSlot);
+    if (_activeEquipSlot) openSlotPicker(_activeEquipSlot);
   }
-}
-
-function _setShopMsg(text) {
-  const el = document.getElementById('shop-msg');
-  if (el) el.textContent = text;
 }
 
 function _renderShopTabs() {
@@ -87,12 +80,7 @@ function _renderShopGrid() {
       if (!canAfford) btn.style.opacity = '0.5';
       btn.onclick = () => {
         const res = buyItem(item.id);
-        if (res.ok) {
-          _setShopMsg(`✓ Bought ${item.name}.`);
-          _renderShopGrid();
-        } else {
-          _setShopMsg(`✗ ${res.reason}`);
-        }
+        if (res.ok) _renderShopGrid();
       };
     }
     card.appendChild(btn);

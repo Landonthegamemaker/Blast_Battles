@@ -129,11 +129,8 @@ function hpBarColor(pct) {
     function renderPlayerCards() {
       const el = document.getElementById('player-all-cards'); if (!el) return;
       el.innerHTML = '';
-      // Equipped weapons float to the top, then equipped defense, then hand cards —
-      // keeps the active loadout visually up front regardless of pickup order.
       const allCards = [
-        ...G.playerInPlay.filter(c => c.type === 'weapon').map(c => ({ card: c, inPlay: true })),
-        ...G.playerInPlay.filter(c => c.type === 'defense').map(c => ({ card: c, inPlay: true })),
+        ...G.playerInPlay.map(c => ({ card: c, inPlay: true })),
         ...G.playerHand.map(c => ({ card: c, inPlay: false }))
       ];
       for (const { card, inPlay } of allCards) {
