@@ -59,22 +59,6 @@ async function startWithDifficulty(diff) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 /**
- * Fog of war — marks `pos` and every tile adjacent to it (king-move radius 1)
- * as permanently revealed. Only called for the PLAYER's own position (initial
- * placement, every player move, and a render-time safety net) — the bot's
- * movement never calls this, so the enemy walking somewhere doesn't leak
- * permanent map knowledge to the player. The bot's own current tile is still
- * visible live while occupied (handled separately in renderArena).
- *
- * @param {number} pos - Tile index (0–48)
- */
-function revealTilesAround(pos) {
-  if (!G.revealedTiles) G.revealedTiles = new Set();
-  G.revealedTiles.add(pos);
-  getReachable(pos, 1).forEach(i => G.revealedTiles.add(i));
-}
-
-/**
  * Resets all game state and starts a new match.
  * Called on first load (after char select) and on rematch.
  */
@@ -207,6 +191,7 @@ function initGame() {
     awaitingScrapChoice: false,
     playerMovedThisPhase: false,
     xrayUsedThisPhase: false,
+    radarPingActive: false,
     dualWieldFiredIds: new Set(),
     playerToxicTurns: 0,
     botToxicTurns: 0,
@@ -219,13 +204,7 @@ function initGame() {
     botHealTotal: 0,
     lastKillingBlow: null,
     matchStartTime: Date.now(),
-    // Fog of war — tile indices whose identity has been seen. Only the
-    // PLAYER's own movement permanently reveals tiles (stepping near or onto
-    // them); the bot's position is visible live while occupied but does not
-    // leak permanent map knowledge about where the bot has been.
-    revealedTiles: new Set(),
   };
-  revealTilesAround(G.playerPos);
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);

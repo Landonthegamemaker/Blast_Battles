@@ -5,11 +5,26 @@
  * Exports (browser globals): render, renderCharDisplay, renderHand, renderBotHand, renderArena, renderInPlay, renderDeckSizes, updatePhaseUI, updateHint, showHelp, toggleHand
  */
 'use strict';
+
+/**
+ * HP threshold → colour, shared by the side-panel HP text and the arena's
+ * mini token HP bar. >50% green, 26–50% yellow/orange, <=25% red.
+ *
+ * @param {number} pct - Current HP as a percentage of max HP (0–100)
+ * @returns {string} CSS colour value
+ */
+function hpBarColor(pct) {
+  if (pct <= 25) return 'var(--accent2)'; // red
+  if (pct <= 50) return 'var(--slow)';    // yellow/orange
+  return 'var(--green)';                  // green
+}
+
     function render() {
-      // Fog of war safety net — guarantees tiles currently adjacent to either
-      // character are revealed even if a call site forgets to (e.g. bot moves).
+      // Fog of war safety net — guarantees tiles currently adjacent to the
+      // player are revealed even if a call site forgets to. Deliberately does
+      // NOT reveal around the bot — the enemy's movement must not permanently
+      // leak map knowledge to the player.
       revealTilesAround(G.playerPos);
-      revealTilesAround(G.botPos);
       renderCharDisplay('player-char-display', G.playerChar, G.locations[G.playerPos]);
       renderCharDisplay('bot-char-display', G.botChar, G.locations[G.botPos]);
       renderHand();
@@ -24,7 +39,7 @@
     function renderCharDisplay(elId, char, loc) {
       const el = document.getElementById(elId); if (!el) return;
       const pct = Math.max(0, (char.hp / char.maxHp) * 100);
-      const hpColor = pct <= 25 ? 'var(--accent2)' : pct <= 50 ? 'var(--slow)' : 'var(--muted)';
+      const hpColor = hpBarColor(pct);
       const isHero = char.faction === 'hero';
       const borderColor = isHero ? 'var(--hero)' : 'var(--villain)';
       const glowColor = isHero ? 'rgba(74,184,255,0.35)' : 'rgba(196,75,255,0.35)';
@@ -354,7 +369,7 @@
         ).join('');
         return `<div class="token-shield-bar">${segments}<span class="shield-label">${durability}</span></div>`;
       };
-      const tokenHpBar = (pct, inPlay) => `${shieldBarHtml(inPlay)}<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%"></div></div>`;
+      const tokenHpBar = (pct, inPlay) => `${shieldBarHtml(inPlay)}<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%;background:${hpBarColor(pct)}"></div></div>`;
 
       // 7x7 grid: 7 rows × 7 cols = 49 tiles
       for (let r = 0; r < 7; r++) {

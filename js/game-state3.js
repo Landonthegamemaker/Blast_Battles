@@ -59,6 +59,21 @@ async function startWithDifficulty(diff) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 /**
+ * Fog of war — marks `pos` and every tile adjacent to it (king-move radius 1)
+ * as revealed. Called whenever a character's position is set or refreshed
+ * (initial placement, player moves, bot moves, and every render as a safety
+ * net) so identities stay visible near either combatant and remain visible
+ * forever once a tile has been seen.
+ *
+ * @param {number} pos - Tile index (0–48)
+ */
+function revealTilesAround(pos) {
+  if (!G.revealedTiles) G.revealedTiles = new Set();
+  G.revealedTiles.add(pos);
+  getReachable(pos, 1).forEach(i => G.revealedTiles.add(i));
+}
+
+/**
  * Resets all game state and starts a new match.
  * Called on first load (after char select) and on rematch.
  */
@@ -203,7 +218,13 @@ function initGame() {
     botHealTotal: 0,
     lastKillingBlow: null,
     matchStartTime: Date.now(),
+    // Fog of war — tile indices whose identity has been seen (adjacent to a
+    // character at some point, or physically stepped on). Starts with both
+    // spawn tiles and their immediate surroundings revealed.
+    revealedTiles: new Set(),
   };
+  revealTilesAround(G.playerPos);
+  revealTilesAround(G.botPos);
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);

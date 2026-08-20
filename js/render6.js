@@ -6,10 +6,6 @@
  */
 'use strict';
     function render() {
-      // Fog of war safety net — guarantees tiles currently adjacent to either
-      // character are revealed even if a call site forgets to (e.g. bot moves).
-      revealTilesAround(G.playerPos);
-      revealTilesAround(G.botPos);
       renderCharDisplay('player-char-display', G.playerChar, G.locations[G.playerPos]);
       renderCharDisplay('bot-char-display', G.botChar, G.locations[G.botPos]);
       renderHand();
@@ -24,7 +20,6 @@
     function renderCharDisplay(elId, char, loc) {
       const el = document.getElementById(elId); if (!el) return;
       const pct = Math.max(0, (char.hp / char.maxHp) * 100);
-      const hpColor = pct <= 25 ? 'var(--accent2)' : pct <= 50 ? 'var(--slow)' : 'var(--muted)';
       const isHero = char.faction === 'hero';
       const borderColor = isHero ? 'var(--hero)' : 'var(--villain)';
       const glowColor = isHero ? 'rgba(74,184,255,0.35)' : 'rgba(196,75,255,0.35)';
@@ -32,6 +27,7 @@
       el.style.boxShadow = `0 0 10px ${glowColor}, inset 0 0 6px ${glowColor}`;
       el.style.padding = '0';
       el.style.overflow = 'hidden';
+      const locName = loc ? loc.name : '?';
       const shadowFilter = 'brightness(0.40) saturate(0.2) hue-rotate(200deg) contrast(1.3) sepia(0.4)';
       const isShadow = char.name === 'The Shadow' || char.name.startsWith('Dark ');
       // shadow's panel: show opponent's portrait darkened (he IS their shadow)
@@ -52,7 +48,7 @@
           <div class="char-type ${char.faction}" style="font-size:0.5rem;flex-shrink:0;white-space:nowrap;">${char.faction.toUpperCase()}</div>
         </div>
         <div class="hp-bar-wrap">
-          <div class="hp-label" style="color:${hpColor};">${char.hp}/${char.maxHp} HP</div>
+          <div class="hp-label">${char.hp}/${char.maxHp} HP</div>
           <div class="hp-label">${(() => {
           const isPlayer = char === G.playerChar;
           const hand = isPlayer ? G.playerHand : G.botHand;
@@ -62,6 +58,8 @@
             ? `${effSpd} SPD <span style="color:var(--muted);font-size:0.48rem;">(${char.speed}-${hand.length + inPlay.length})</span>`
             : `${char.speed} SPD`;
         })()}</div>
+          <div style="font-size:0.5rem;color:var(--muted);font-family:'Share Tech Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${locName}</div>
+          <div class="hp-bar"><div class="hp-fill" style="width:${pct}%"></div></div>
         </div>
         ${(([ability, weakness]) =>
           `<div class="char-attr" style="font-size:0.52rem;white-space:normal;overflow:hidden;">⭐ ${ability}</div>`
@@ -324,36 +322,6 @@
       const swiftSteps = isSwift ? (PHASES[G.phase] === 'fast' ? 2 : 1) : 1;
       const reachable = G.awaitingMove ? getReachableForChar(G.playerChar, G.playerPos, swiftSteps) : [];
 
-      // Live weapon-range preview — if the player has a weapon card selected, tiles within
-      // its range from the player's current position get a green outline, and the bot's
-      // occupied tile is flagged valid/invalid to explain why FIRE is (or isn't) available.
-      const selCard = (!G.awaitingScrapChoice && G.selectedCard && !G.gameOver && !G.playerActedThisPhase)
-        ? (G.playerHand.find(c => c.id === G.selectedCard) || G.playerInPlay.find(c => c.id === G.selectedCard))
-        : null;
-      const showRangePreview = !!(selCard && selCard.type === 'weapon');
-      const previewRange = showRangePreview ? (selCard.subtype === 'melee' ? 0 : selCard.range) : -1;
-
-      // Per-token HP bars, with a segmented shield sub-bar for any equipped armor.
-      // Segment count = summed maxDurability of all equipped armor; filled segments
-      // = summed remaining durability (i.e. hits the armor can still absorb).
-      const pPct = Math.max(0, (G.playerChar.hp / G.playerChar.maxHp) * 100);
-      const bPct = Math.max(0, (G.botChar.hp / G.botChar.maxHp) * 100);
-      const getShieldStatus = inPlay => {
-        const armor = inPlay.filter(c => c.type === 'defense' && c.healAmount === 0);
-        const durability = armor.reduce((sum, c) => sum + Math.max(0, c.durability), 0);
-        const maxDurability = armor.reduce((sum, c) => sum + c.maxDurability, 0);
-        return { durability, maxDurability };
-      };
-      const shieldBarHtml = inPlay => {
-        const { durability, maxDurability } = getShieldStatus(inPlay);
-        if (maxDurability <= 0) return '';
-        const segments = Array.from({ length: maxDurability }, (_, i) =>
-          `<div class="shield-segment${i < durability ? ' filled' : ''}"></div>`
-        ).join('');
-        return `<div class="token-shield-bar">${segments}<span class="shield-label">${durability}</span></div>`;
-      };
-      const tokenHpBar = (pct, inPlay) => `<div class="token-hp-bar"><div class="token-hp-fill" style="width:${pct}%"></div></div>${shieldBarHtml(inPlay)}`;
-
       // 7x7 grid: 7 rows × 7 cols = 49 tiles
       for (let r = 0; r < 7; r++) {
         const rowDiv = document.createElement('div');
@@ -365,10 +333,6 @@
           tile.className = 'location-tile';
           const pHere = G.playerPos === idx;
           const bHere = G.botPos === idx;
-          // Fog of war: identity is only shown for tiles that have been adjacent
-          // to a character at some point, or physically stepped on.
-          const revealed = pHere || bHere || (G.revealedTiles && G.revealedTiles.has(idx));
-          if (!revealed) tile.classList.add('fogged');
           if (pHere && bHere) tile.classList.add('both-here');
           else if (pHere) tile.classList.add('player-here');
           else if (bHere) tile.classList.add('bot-here');
@@ -377,22 +341,13 @@
 
           const dist = getDistance(G.playerPos, idx);
 
-          if (showRangePreview) {
-            const inRange = dist <= previewRange;
-            if (bHere) {
-              tile.classList.add(inRange ? 'weapon-target-valid' : 'weapon-target-invalid');
-            } else if (inRange) {
-              tile.classList.add('in-weapon-range');
-            }
-          }
-
           tile.innerHTML = `
         <div class="loc-icons">
-          ${pHere ? `<div class="token-stack">${tokenHpBar(pPct, G.playerInPlay)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
-          ${bHere ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
+          ${pHere ? `<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div>` : ''}
+          ${bHere ? `<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div>` : ''}
         </div>
-        <div class="loc-name">${revealed ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
-        <div class="loc-effect ${revealed ? loc.css : ''}">${revealed ? loc.effectDesc : ''}</div>
+        <div class="loc-name">${loc.icon} ${loc.name}</div>
+        <div class="loc-effect ${loc.css}">${loc.effectDesc}</div>
         <div class="loc-dist">${dist > 0 ? dist + 'sp' : ''}</div>
       `;
           if (G.awaitingMove) {

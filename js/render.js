@@ -20,11 +20,6 @@ function hpBarColor(pct) {
 }
 
     function render() {
-      // Fog of war safety net — guarantees tiles currently adjacent to the
-      // player are revealed even if a call site forgets to. Deliberately does
-      // NOT reveal around the bot — the enemy's movement must not permanently
-      // leak map knowledge to the player.
-      revealTilesAround(G.playerPos);
       renderCharDisplay('player-char-display', G.playerChar, G.locations[G.playerPos]);
       renderCharDisplay('bot-char-display', G.botChar, G.locations[G.botPos]);
       renderHand();
@@ -382,21 +377,24 @@ function hpBarColor(pct) {
           tile.className = 'location-tile';
           const pHere = G.playerPos === idx;
           const bHere = G.botPos === idx;
-          // Fog of war: identity is only shown for tiles that have been adjacent
-          // to a character at some point, or physically stepped on.
-          const revealed = pHere || bHere || (G.revealedTiles && G.revealedTiles.has(idx));
+          const dist = getDistance(G.playerPos, idx);
+          // Fog of war: only the player's own tile and its immediate (1-tile)
+          // radius are visible — this is live, not permanent, so tiles go
+          // dark again once the player moves away. The bot only appears when
+          // it's standing within that same radius, or briefly while a Radar
+          // ping (Tactical Tim) has located it.
+          const revealed = dist <= 1 || (bHere && G.radarPingActive);
+          const botVisible = bHere && revealed;
           if (!revealed) tile.classList.add('fogged');
-          if (pHere && bHere) tile.classList.add('both-here');
+          if (pHere && botVisible) tile.classList.add('both-here');
           else if (pHere) tile.classList.add('player-here');
-          else if (bHere) tile.classList.add('bot-here');
+          else if (botVisible) tile.classList.add('bot-here');
           if (G.awaitingMove && reachable.includes(idx)) tile.classList.add('selectable');
           else if (G.awaitingMove && !pHere) tile.classList.add('not-reachable');
 
-          const dist = getDistance(G.playerPos, idx);
-
           if (showRangePreview) {
             const inRange = dist <= previewRange;
-            if (bHere) {
+            if (botVisible) {
               tile.classList.add(inRange ? 'weapon-target-valid' : 'weapon-target-invalid');
             } else if (linePath.has(idx)) {
               tile.classList.add('weapon-line');
@@ -406,9 +404,9 @@ function hpBarColor(pct) {
           tile.innerHTML = `
         <div class="loc-icons">
           ${pHere ? `<div class="token-stack">${tokenHpBar(pPct, G.playerInPlay)}<div class="player-token ${G.playerChar.faction === 'hero' ? 'p' : 'b'}">${G.playerChar.icon}</div></div>` : ''}
-          ${bHere ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
+          ${botVisible ? `<div class="token-stack">${tokenHpBar(bPct, G.botInPlay)}<div class="player-token ${G.botChar.faction === 'hero' ? 'p' : 'b'}">${G.botChar.icon}</div></div>` : ''}
         </div>
-        ${showRangePreview && bHere ? '<div class="weapon-bullseye">🎯</div>' : ''}
+        ${showRangePreview && botVisible ? '<div class="weapon-bullseye">🎯</div>' : ''}
         <div class="loc-name">${revealed ? `${loc.icon} ${loc.name}` : '❔ ???'}</div>
         <div class="loc-effect ${revealed ? loc.css : ''}">${revealed ? loc.effectDesc : ''}</div>
         <div class="loc-dist">${dist > 0 ? dist + 'sp' : ''}</div>
@@ -449,12 +447,12 @@ function hpBarColor(pct) {
         skipBtn.textContent = 'END TURN';
       }
 
-      // Tactical Tim X-Ray button — show when available
+      // Tactical Tim Radar button — show when available
       const xrayBtn = document.getElementById('btn-xray');
       if (xrayBtn) {
         const canXray = G.playerChar.attribute === 'tactical_xray'
           && !G.playerActedThisPhase && !G.xrayUsedThisPhase
-          && !G.gameOver && G.botHand.length > 0;
+          && !G.gameOver;
         xrayBtn.style.display = G.playerChar.attribute === 'tactical_xray' ? 'inline-flex' : 'none';
         xrayBtn.disabled = !canXray;
         xrayBtn.style.opacity = canXray ? '1' : '0.4';

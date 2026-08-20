@@ -119,7 +119,7 @@ const CHARACTER_POOL = [
   { id: 'c8', name: 'The Shadow', type: 'character', faction: 'villain', hp: 1, maxHp: 1, speed: 0, attribute: 'shadow_clone', attrDesc: 'Mirrors the hero · Turn always last', icon: '🥷', img: 'img/char/the_shadow.jpeg' },
   { id: 'c9', name: 'Cowboy Clint', type: 'character', faction: 'villain', hp: 160, maxHp: 160, speed: 9, attribute: 'deadeye', attrDesc: 'Fire Revolvers faster · Revolvers & Pistols only', icon: '🤠', img: 'img/char/cowboy_clint.png' },
   { id: 'c12', name: 'Huntress Hellena', type: 'character', faction: 'villain', hp: 200, maxHp: 200, speed: 5, attribute: 'sniper_specialist', attrDesc: 'Sniper+33% dmg · Move Fast & Medium only', icon: '🎯', img: 'img/char/huntress_hellena.png' },
-  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'Radar: ping enemy direction & range · -1 SPD per card equipped', icon: '🧠', img: 'img/char/tactical_tim.png' },
+  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'X-Ray: reveal hidden card · -1 SPD per card equipped', icon: '🧠', img: 'img/char/tactical_tim.png' },
   { id: 'c15', name: 'Hank the Tank', type: 'character', faction: 'villain', hp: 220, maxHp: 220, speed: 3, attribute: 'explosive_specialist', attrDesc: 'Explosive +40% dmg · Too slow for Fast phase', icon: '💥', img: 'img/char/hank_the_tank.png' },
 ];
 

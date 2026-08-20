@@ -59,22 +59,6 @@ async function startWithDifficulty(diff) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 /**
- * Fog of war — marks `pos` and every tile adjacent to it (king-move radius 1)
- * as permanently revealed. Only called for the PLAYER's own position (initial
- * placement, every player move, and a render-time safety net) — the bot's
- * movement never calls this, so the enemy walking somewhere doesn't leak
- * permanent map knowledge to the player. The bot's own current tile is still
- * visible live while occupied (handled separately in renderArena).
- *
- * @param {number} pos - Tile index (0–48)
- */
-function revealTilesAround(pos) {
-  if (!G.revealedTiles) G.revealedTiles = new Set();
-  G.revealedTiles.add(pos);
-  getReachable(pos, 1).forEach(i => G.revealedTiles.add(i));
-}
-
-/**
  * Resets all game state and starts a new match.
  * Called on first load (after char select) and on rematch.
  */
@@ -219,13 +203,7 @@ function initGame() {
     botHealTotal: 0,
     lastKillingBlow: null,
     matchStartTime: Date.now(),
-    // Fog of war — tile indices whose identity has been seen. Only the
-    // PLAYER's own movement permanently reveals tiles (stepping near or onto
-    // them); the bot's position is visible live while occupied but does not
-    // leak permanent map knowledge about where the bot has been.
-    revealedTiles: new Set(),
   };
-  revealTilesAround(G.playerPos);
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
@@ -580,27 +558,14 @@ function playerPlayCard(card) {
     const aceCanDodge = G.botChar.attribute === 'dodge_bullets'
       && card.subtype !== 'explosive' && card.subtype !== 'missile' && card.subtype !== 'melee';
     if (aceCanDodge && Math.random() < 0.50) {
-      const missSplash = getMissSplashDamage(result.finalDmg);
-      G.botChar.hp = Math.max(0, G.botChar.hp - missSplash);
-      G.playerDmgDealt += missSplash;
-      logMsg('bot', `♠️ Agent Ace dodges the direct hit from ${card.name} — but takes ${missSplash} splash dmg from the near-miss!`);
+      logMsg('bot', `♠️ Agent Ace dodges ${card.name}!`);
     } else {
       G.botChar.hp = Math.max(0, G.botChar.hp - result.finalDmg);
       G.playerDmgDealt += result.finalDmg;
       const rangePct = card.subtype === 'melee'
         ? '(melee)'
-        : `(${dist}/${card.range} rng — ${Math.round(getRangeMultiplier(card, dist) * 100)}% dmg)`;
+        : `(${dist}/${card.range} rng — ${Math.round(dist / card.range * 100)}% dmg)`;
       logMsg('player', `You fire ${card.name} → ${result.finalDmg} dmg ${rangePct}${result.armorNote}.`);
-
-      // Explosive/missile splash — anyone within 1 tile of the target's tile,
-      // including the attacker on a close-range throw, takes 50% splash dmg.
-      if (card.subtype === 'explosive' || card.subtype === 'missile') {
-        const selfSplash = getExplosiveSplashDamage(result.finalDmg, dist);
-        if (selfSplash > 0) {
-          G.playerChar.hp = Math.max(0, G.playerChar.hp - selfSplash);
-          logMsg('player', `💥 ${card.name} catches ${G.playerChar.name} in the blast radius — ${selfSplash} splash dmg!`);
-        }
-      }
     }
 
     card.ammo--;
