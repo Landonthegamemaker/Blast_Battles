@@ -1,26 +1,57 @@
 /**
  * Name: player-actions.js
- * Description: Player action handlers for movement, Tactical Tim X-Ray, and skipping phases.
+ * Description: Player action handlers for movement, Tactical Tim's Radar, and skipping phases.
  * Dependencies (must load first): ai-bot.js, render.js
  * Exports (browser globals): playerMove, playerXray, skipPhase
  */
 'use strict';
 
-// Tactical Tim X-Ray: reveal a random hidden bot card for 5 seconds (costs action)
+/**
+ * Tactical Tim's Radar (costs the phase's action): pings outward in each of the
+ * 4 cardinal directions from the player's position, one tile at a time. If a
+ * pulse's straight-line path reaches the bot's exact tile before running off
+ * the grid, the signal "bounces back" — revealing the bot's direction and
+ * distance, and briefly making its token visible on the arena regardless of
+ * the fog-of-war radius. If no direction lines up with the bot, the sweep
+ * comes back with nothing.
+ */
 function playerXray() {
   if (G.gameOver || G.playerActedThisPhase || G.xrayUsedThisPhase) return;
   if (G.playerChar.attribute !== 'tactical_xray') return;
-  const hiddenCards = G.botHand.filter(c => c.id !== G.botRevealedCard);
-  if (hiddenCards.length === 0) {
-    logMsg('system', `No hidden bot cards to scan.`); return;
+
+  const pr = rowOf(G.playerPos), pc = colOf(G.playerPos);
+  const br = rowOf(G.botPos), bc = colOf(G.botPos);
+  const DIRECTIONS = [
+    { name: 'North', dr: -1, dc: 0 },
+    { name: 'South', dr: 1, dc: 0 },
+    { name: 'East', dr: 0, dc: 1 },
+    { name: 'West', dr: 0, dc: -1 },
+  ];
+
+  let hit = null;
+  for (const dir of DIRECTIONS) {
+    // Step the pulse outward one tile at a time until it leaves the grid or lands on the bot
+    let r = pr, c = pc, dist = 0;
+    while (true) {
+      r += dir.dr; c += dir.dc; dist++;
+      if (r < 0 || r > 6 || c < 0 || c > 6) break; // signal fades off the edge of the grid
+      if (r === br && c === bc) { hit = { name: dir.name, dist }; break; }
+    }
+    if (hit) break;
   }
-  const card = hiddenCards[Math.floor(Math.random() * hiddenCards.length)];
+
   G.xrayUsedThisPhase = true;
   G.playerActedThisPhase = true;
-  logMsg('player', `🔍 ${G.playerChar.name} scans the enemy — reveals: ${card.name}!`);
-  G.botRevealedCard = card.id;
-  render();
-  setTimeout(() => { G.botRevealedCard = null; render(); }, 5000);
+
+  if (hit) {
+    logMsg('player', `📡 ${G.playerChar.name} pings ${hit.name} — signal bounces back! Enemy detected ${hit.dist} tile(s) out.`);
+    G.radarPingActive = true;
+    render();
+    setTimeout(() => { G.radarPingActive = false; render(); }, 5000);
+  } else {
+    logMsg('player', `📡 ${G.playerChar.name} sweeps all directions — no contact. Enemy isn't aligned with you on any axis.`);
+    render();
+  }
   checkPhaseComplete();
 }
 
@@ -115,8 +146,6 @@ function playerMove(locIndex) {
   } else if (reachable.includes(locIndex)) {
     logMsg('player', `You move to ${G.locations[locIndex].name}.`);
     G.playerPos = locIndex;
-    if (!G.revealedTiles) G.revealedTiles = new Set();
-    G.revealedTiles.add(locIndex);
     G.playerMovedThisPhase = true;
     BB_Audio.stopSfx();
     BB_Audio.playZoneSfx(G.locations[locIndex].effect);

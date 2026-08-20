@@ -5,11 +5,10 @@
  * Dependencies (must load first):
  * - character-data.js (CHARACTER_POOL array)
  * - audio.js (BB_Audio for music preview)
- * - equip.js (showEquipScreen() — confirmCharSelect() now routes here, not straight to difficulty)
  * Exports (browser globals):
  * - showCharSelect() - display the character selection screen
  * - selectChar(charId) - select a character by ID
- * - confirmCharSelect() - confirm the current character selection and proceed to the Equip screen
+ * - confirmCharSelect() - confirm the current character selection and proceed to difficulty selection
  * Internal state:
  * - _selectedCharId: currently selected character ID (null if none)
  * - _currentSort: current sorting key for character grids ('faction', 'name', 'hp', 'speed', 'ability')
@@ -205,7 +204,7 @@ function selectChar(charId) {
 function confirmCharSelect() {
     if (!_selectedCharId) return;
     document.getElementById('char-select-overlay').style.display = 'none';
-    showEquipScreen();
+    document.getElementById('difficulty-overlay').classList.remove('hidden');
 }
 
 // Boot — show character select screen

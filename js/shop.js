@@ -1,0 +1,89 @@
+/**
+ * shop.js — Shop screen: spend credits earned from matches to unlock new gear/weapons.
+ * Dependencies (must load first): data.js (ALL_EQUIPPABLE), progression.js (getCredits/isOwned/buyItem)
+ * Layers on top of whichever screen opened it (usually the Equip screen) — closing it
+ * just hides the shop overlay and refreshes the screen underneath.
+ *
+ * Exports (browser globals):
+ *   openShop()   — show the shop, filtered to "All" items
+ *   closeShop()  — hide the shop, refresh the equip screen behind it if visible
+ */
+'use strict';
+
+let _shopFilterSlot = 'all';
+const SHOP_SLOTS = ['all', 'hand', 'head', 'chest', 'legs', 'feet', 'arm'];
+const SHOP_SLOT_LABELS = { all: 'All', hand: 'Hand', head: 'Head', chest: 'Chest', legs: 'Legs', feet: 'Feet', arm: 'Arm' };
+
+function openShop() {
+  _shopFilterSlot = 'all';
+  _renderShopTabs();
+  _renderShopGrid();
+  document.getElementById('shop-overlay').classList.remove('hidden');
+}
+
+function closeShop() {
+  document.getElementById('shop-overlay').classList.add('hidden');
+  const equipOverlay = document.getElementById('equip-overlay');
+  if (equipOverlay && !equipOverlay.classList.contains('hidden')) {
+    document.getElementById('equip-credits').textContent = `💰 ${getCredits()}`;
+    if (_activeEquipSlot) openSlotPicker(_activeEquipSlot);
+  }
+}
+
+function _renderShopTabs() {
+  const el = document.getElementById('shop-tabs');
+  el.innerHTML = '';
+  for (const s of SHOP_SLOTS) {
+    const btn = document.createElement('button');
+    btn.className = 'shop-tab' + (s === _shopFilterSlot ? ' active-tab' : '');
+    btn.textContent = SHOP_SLOT_LABELS[s];
+    btn.onclick = () => { _shopFilterSlot = s; _renderShopTabs(); _renderShopGrid(); };
+    el.appendChild(btn);
+  }
+}
+
+function _shopItemStat(item) {
+  if (item.type === 'weapon') return `${item.damage} DMG · ${item.subtype.replace('_', ' ')}`;
+  if (item.healAmount > 0) return `+${item.healAmount} HP`;
+  return `${item.defense} DEF · ${item.durability}×`;
+}
+
+function _renderShopGrid() {
+  document.getElementById('shop-credits').textContent = `💰 ${getCredits()}`;
+  const grid = document.getElementById('shop-grid');
+  grid.innerHTML = '';
+  const items = ALL_EQUIPPABLE
+    .filter(i => _shopFilterSlot === 'all' || i.slot === _shopFilterSlot)
+    .sort((a, b) => a.price - b.price);
+
+  for (const item of items) {
+    const owned = isOwned(item.id);
+    const card = document.createElement('div');
+    card.className = 'shop-card' + (owned ? ' owned' : '');
+    card.innerHTML = `
+      <div class="sc-icon">${item.icon}</div>
+      <div class="sc-name">${item.name}</div>
+      <div class="sc-stat">${_shopItemStat(item)}</div>
+      <div class="sc-stat" style="color:var(--accent);">${owned ? 'OWNED' : `💰 ${item.price}`}</div>
+    `;
+    const btn = document.createElement('button');
+    if (owned) {
+      btn.className = 'btn';
+      btn.textContent = '✓ OWNED';
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    } else {
+      btn.className = 'btn primary';
+      btn.textContent = 'BUY';
+      const canAfford = getCredits() >= item.price;
+      btn.disabled = !canAfford;
+      if (!canAfford) btn.style.opacity = '0.5';
+      btn.onclick = () => {
+        const res = buyItem(item.id);
+        if (res.ok) _renderShopGrid();
+      };
+    }
+    card.appendChild(btn);
+    grid.appendChild(card);
+  }
+}

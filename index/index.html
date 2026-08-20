@@ -694,22 +694,6 @@
       font-family: 'Share Tech Mono', 'Courier New', monospace;
     }
 
-    .hp-bar {
-      height: 5px;
-      background: var(--surface);
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      margin-top: 2px;
-    }
-
-    .hp-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
-      transition: width 0.4s;
-      border-radius: 4px;
-    }
-
     .char-stats {
       display: flex;
       gap: 4px;
@@ -1131,12 +1115,6 @@
       box-shadow: 0 0 12px rgba(232, 184, 75, 0.4);
     }
 
-    .location-tile.selectable {
-      border-color: var(--green);
-      animation: pulse-green 1s infinite;
-      cursor: pointer;
-    }
-
     .location-tile.not-reachable {
       border-color: var(--accent2);
       background: rgba(255, 68, 68, 0.06);
@@ -1148,161 +1126,18 @@
       pointer-events: none;
     }
 
-    /* ── Equip screen: arrow/shield-shaped slot markers over the paperdoll ── */
-    .equip-slot {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      width: 46px;
-      height: 46px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1px;
-      background: rgba(10, 12, 15, 0.92);
-      border: 2px solid var(--border);
-      clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
-      cursor: pointer;
+    /* ── Fog of war: tile identity not yet seen ── */
+    .location-tile.fogged {
+      background: var(--surface);
+    }
+
+    .location-tile.fogged .loc-name {
       color: var(--muted);
-      transition: all 0.15s;
-      padding: 4px 2px 2px;
-      z-index: 2;
-    }
-
-    .equip-slot:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .equip-slot.filled {
-      border-color: var(--green);
-      color: var(--text);
-      background: rgba(68, 255, 136, 0.08);
-    }
-
-    .equip-slot.active-pick {
-      border-color: #ffffff;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-    }
-
-    .equip-slot-icon {
-      font-size: 1.1rem;
-      line-height: 1;
-    }
-
-    .equip-slot-label {
-      font-size: 0.36rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-family: 'Share Tech Mono', monospace;
-    }
-
-    .equip-pick-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface2);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .equip-pick-row:hover {
-      border-color: var(--accent);
-    }
-
-    .equip-pick-row.selected {
-      border-color: var(--green);
-      background: rgba(68, 255, 136, 0.08);
-    }
-
-    .equip-pick-row .epr-icon {
-      font-size: 1.1rem;
-      flex-shrink: 0;
-    }
-
-    .equip-pick-row .epr-name {
-      font-size: 0.68rem;
-      color: var(--text);
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .equip-pick-row .epr-stat {
-      font-size: 0.55rem;
-      color: var(--muted);
-      font-family: 'Share Tech Mono', monospace;
-      flex-shrink: 0;
-    }
-
-    /* ── Shop screen ── */
-    .shop-tab {
-      font-size: 0.62rem;
-      padding: 5px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: var(--surface2);
-      color: var(--muted);
-      cursor: pointer;
-      font-family: 'Share Tech Mono', monospace;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .shop-tab.active-tab {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: rgba(232, 184, 75, 0.1);
-    }
-
-    .shop-card {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--surface2);
-      padding: 8px 6px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      gap: 3px;
-    }
-
-    .shop-card.owned {
-      border-color: var(--green);
-      background: rgba(68, 255, 136, 0.06);
-    }
-
-    .shop-card .sc-icon {
-      font-size: 1.4rem;
-    }
-
-    .shop-card .sc-name {
-      font-size: 0.6rem;
-      color: var(--text);
-      line-height: 1.2;
-      min-height: 2.2em;
-    }
-
-    .shop-card .sc-stat {
-      font-size: 0.5rem;
-      color: var(--muted);
-      font-family: 'Share Tech Mono', monospace;
-    }
-
-    .shop-card button {
-      width: 100%;
-      margin-top: 3px;
-      font-size: 0.55rem;
-      padding: 4px 2px;
     }
 
     /* ── Live weapon-range preview (shown when a weapon card is selected) ── */
-    .location-tile.in-weapon-range {
+    /* Tracer line between attacker and target, rather than the whole range circle */
+    .location-tile.weapon-line {
       outline: 2px solid rgba(68, 255, 136, 0.45);
       outline-offset: -2px;
     }
@@ -1316,6 +1151,17 @@
     .location-tile.weapon-target-invalid {
       outline: 3px solid var(--accent2);
       outline-offset: -3px;
+    }
+
+    .weapon-bullseye {
+      position: absolute;
+      top: -4px;
+      right: -2px;
+      font-size: 0.85rem;
+      line-height: 1;
+      filter: drop-shadow(0 0 3px rgba(68, 255, 136, 0.9));
+      pointer-events: none;
+      z-index: 5;
     }
 
     @keyframes pulse-green {
@@ -1394,8 +1240,38 @@
 
     .token-hp-fill {
       height: 100%;
-      background: linear-gradient(90deg, #ff4444, #e8b84b, #44ff88);
-      transition: width 0.4s;
+      background: var(--green);
+      transition: width 0.4s, background 0.4s;
+    }
+
+    /* ── Shield sub-bar (segmented by armor durability, stacked above HP) ── */
+    .token-shield-bar {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      margin-bottom: 1px;
+    }
+
+    .shield-segment {
+      width: 3px;
+      height: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1px;
+    }
+
+    .shield-segment.filled {
+      background: var(--hero);
+      border-color: var(--hero);
+      box-shadow: 0 0 3px var(--hero);
+    }
+
+    .shield-label {
+      font-size: 0.42rem;
+      line-height: 1;
+      color: var(--hero);
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      margin-left: 2px;
     }
 
     @media (max-width: 700px) {
@@ -1406,6 +1282,15 @@
 
       .token-stack {
         gap: 1px;
+      }
+
+      .shield-segment {
+        width: 2px;
+        height: 3px;
+      }
+
+      .shield-label {
+        font-size: 0.36rem;
       }
     }
 
@@ -2029,9 +1914,9 @@
             <div class="col-label" style="flex-shrink:0;">YOU</div>
             <button class="btn primary" id="btn-skip" onclick="skipPhase()" disabled=""
               style="font-size:0.5rem;padding:2px 6px;letter-spacing:0.5px;flex-shrink:0;">END TURN</button>
-            <button class="btn" id="btn-xray" onclick="playerXray()"
+            <button class="btn" id="btn-xray" onclick="playerXray()" title="Radar: ping for the enemy's direction and range"
               style="display:none;font-size:0.5rem;padding:2px 6px;letter-spacing:0.5px;flex-shrink:0;background:rgba(74,184,255,0.15);border-color:rgba(74,184,255,0.5);color:#4ab8ff;">
-              🔍</button>
+              📡</button>
             <button class="btn danger" onclick="retreat()" style="font-size:0.5rem;padding:2px 6px;flex-shrink:0;"
               title="End the match early">🏳</button>
           </div>
@@ -2165,97 +2050,6 @@
     </div>
   </div>
 
-  <!-- Equip Screen — pre-match loadout: 8-slot paperdoll (head/chest/legs/feet/2 arms/2 hands) -->
-  <div class="modal-overlay hidden" id="equip-overlay">
-    <div class="modal" style="max-width:900px;width:95%;text-align:center;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <h2
-          style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.3rem;color:var(--accent);letter-spacing:2px;">
-          EQUIP LOADOUT</h2>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div id="equip-credits" style="font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
-          <button class="btn" style="font-size:0.65rem;padding:5px 10px;" onclick="openShop()">🛒 SHOP</button>
-        </div>
-      </div>
-      <p style="color:var(--muted);font-size:0.72rem;margin-bottom:10px;">
-        Tap a slot to choose gear. Hand slots (weapons/shields/items) become your starting hand — the rest are worn
-        passively from turn 1.
-      </p>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start;">
-        <div id="equip-doll-wrap" style="position:relative;width:280px;flex-shrink:0;">
-          <svg id="equip-doll-svg" viewBox="0 0 320 420" style="width:100%;display:block;">
-            <circle cx="160" cy="55" r="42" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <circle cx="146" cy="50" r="3.5" fill="var(--muted)" />
-            <circle cx="174" cy="50" r="3.5" fill="var(--muted)" />
-            <path d="M144,66 Q160,78 176,66" stroke="var(--muted)" stroke-width="2" fill="none" stroke-linecap="round" />
-            <polygon points="112,100 208,100 196,255 124,255" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <path d="M160,165 C155,155 140,155 140,170 C140,182 160,198 160,198 C160,198 180,182 180,170 C180,155 165,155 160,165 Z"
-              fill="none" stroke="var(--muted)" stroke-width="2" />
-            <path d="M112,108 L70,112 L28,258 L58,255 L98,140 Z" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <path d="M208,108 L250,112 L292,258 L262,255 L222,140 Z" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <polygon points="35,240 42,258 60,258 46,270 52,288 35,276 18,288 24,270 10,258 28,258"
-              fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <polygon points="285,240 292,258 310,258 296,270 302,288 285,276 268,288 274,270 260,258 278,258"
-              fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <rect x="120" y="255" width="35" height="90" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <rect x="165" y="255" width="35" height="90" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <ellipse cx="137" cy="360" rx="24" ry="14" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-            <ellipse cx="183" cy="360" rx="24" ry="14" fill="var(--surface2)" stroke="var(--border)" stroke-width="2" />
-          </svg>
-          <button class="equip-slot" data-slot="head" style="left:50%;top:11%;" onclick="openSlotPicker('head')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Head</span>
-          </button>
-          <button class="equip-slot" data-slot="chest" style="left:50%;top:40%;" onclick="openSlotPicker('chest')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Chest</span>
-          </button>
-          <button class="equip-slot" data-slot="armL" style="left:20%;top:31%;" onclick="openSlotPicker('armL')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Arm</span>
-          </button>
-          <button class="equip-slot" data-slot="armR" style="left:80%;top:31%;" onclick="openSlotPicker('armR')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Arm</span>
-          </button>
-          <button class="equip-slot equip-slot-hand" data-slot="hand1" style="left:11%;top:63%;" onclick="openSlotPicker('hand1')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Hand</span>
-          </button>
-          <button class="equip-slot equip-slot-hand" data-slot="hand2" style="left:89%;top:63%;" onclick="openSlotPicker('hand2')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Hand</span>
-          </button>
-          <button class="equip-slot" data-slot="legs" style="left:50%;top:71%;" onclick="openSlotPicker('legs')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Legs</span>
-          </button>
-          <button class="equip-slot" data-slot="feet" style="left:50%;top:87%;" onclick="openSlotPicker('feet')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Feet</span>
-          </button>
-        </div>
-        <div id="equip-picker-panel" style="flex:1;min-width:240px;max-width:360px;text-align:left;">
-          <div id="equip-picker-empty" style="color:var(--muted);font-size:0.75rem;padding:20px 10px;text-align:center;">
-            ← Tap a slot on the left to see what you own for it.
-          </div>
-          <div id="equip-picker-list" style="display:none;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto;"></div>
-        </div>
-      </div>
-      <button id="equip-confirm-btn" class="btn primary" style="width:100%;margin-top:14px;opacity:0.5;pointer-events:none;"
-        onclick="confirmEquip()">CONFIRM LOADOUT →</button>
-    </div>
-  </div>
-
-  <!-- Shop Screen — spend earned credits to unlock new gear/weapons -->
-  <div class="modal-overlay hidden" id="shop-overlay">
-    <div class="modal" style="max-width:780px;width:95%;text-align:center;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h2
-          style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.3rem;color:var(--accent);letter-spacing:2px;">
-          🛒 SHOP</h2>
-        <div id="shop-credits" style="font-size:0.85rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
-      </div>
-      <div id="shop-tabs" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;"></div>
-      <div id="shop-grid"
-        style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;max-height:50vh;overflow-y:auto;padding:2px;">
-      </div>
-      <button class="btn primary" style="width:100%;margin-top:14px;" onclick="closeShop()">CLOSE</button>
-    </div>
-  </div>
-
   <!-- Help Modal -->
   <div class="modal-overlay hidden" id="help-overlay">
     <div class="modal" style="max-width:520px;text-align:left;">
@@ -2289,7 +2083,6 @@
 
   <script src="js/audio.js"></script>
   <script src="js/data.js"></script>
-  <script src="js/progression.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/grid.js"></script>
   <script src="js/combat.js"></script>
@@ -2297,8 +2090,6 @@
   <script src="js/ai-bot.js"></script>
   <script src="js/render.js"></script>
   <script src="js/char-select.js"></script>
-  <script src="js/equip.js"></script>
-  <script src="js/shop.js"></script>
   <script src="js/player-actions.js"></script>
 </body>
 </html>

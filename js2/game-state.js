@@ -158,24 +158,7 @@ function initGame() {
     return [deepClone(weapon), deepClone(defense)];
   }
 
-  // Player's starting hand + passive gear — from the Equip screen loadout if one
-  // was made, otherwise fall back to the old random starterDeck (e.g. quick-play).
-  const hasLoadout = typeof PlayerLoadout !== 'undefined' && (PlayerLoadout.hand1 || PlayerLoadout.hand2);
-  const cloneLoadoutItem = id => {
-    const c = deepClone(ALL_EQUIPPABLE.find(i => i.id === id));
-    if (c.maxDurability) c.durability = c.maxDurability;
-    if (c.ammo !== undefined) c._maxAmmo = c.ammo;
-    c.id = c.id + '_eq_' + Math.random().toString(36).slice(2, 7); // guarantee uniqueness (dupes possible across slots)
-    return c;
-  };
-  let playerHand, playerLoadoutGear;
-  if (hasLoadout) {
-    playerHand = ['hand1', 'hand2'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
-    playerLoadoutGear = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
-  } else {
-    playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
-    playerLoadoutGear = [];
-  }
+  const playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
   const botHand = starterDeck(botChar, weaponDeck, defenseDeck);
 
   // 7×7 grid — center tile always neutral
@@ -194,11 +177,10 @@ function initGame() {
     botChar: deepClone(botChar),
     playerHand,
     botHand,
-    playerInPlay: playerLoadoutGear,
+    playerInPlay: [],
     botInPlay: [],
     playerPos: 0,
     botPos: 48,
-    revealedTiles: new Set([0]),
     locations: locs,
     weaponDeck,
     defenseDeck,
@@ -209,6 +191,7 @@ function initGame() {
     awaitingScrapChoice: false,
     playerMovedThisPhase: false,
     xrayUsedThisPhase: false,
+    radarPingActive: false,
     dualWieldFiredIds: new Set(),
     playerToxicTurns: 0,
     botToxicTurns: 0,
@@ -225,10 +208,7 @@ function initGame() {
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
-  logMsg('system', `You start at ${G.locations[G.playerPos].name} (top-left). Bot starts in the bottom-right corner — unexplored.`);
-  if (playerLoadoutGear.length > 0) {
-    logMsg('system', `Equipped: ${playerLoadoutGear.map(g => `${g.icon} ${g.name}`).join(', ')}`);
-  }
+  logMsg('system', `You start at ${G.locations[G.playerPos].name} (top-left). Bot starts at ${G.locations[G.botPos].name} (bottom-right).`);
   if (G.botChar.name.startsWith('Dark ')) {
     logMsg('system', `🥷 ${G.botChar.name} has mirrored ${G.playerChar.name} — same ability, same weakness!`);
   } else if (G.playerChar.name.startsWith('Dark ')) {
@@ -579,14 +559,27 @@ function playerPlayCard(card) {
     const aceCanDodge = G.botChar.attribute === 'dodge_bullets'
       && card.subtype !== 'explosive' && card.subtype !== 'missile' && card.subtype !== 'melee';
     if (aceCanDodge && Math.random() < 0.50) {
-      logMsg('bot', `♠️ Agent Ace dodges ${card.name}!`);
+      const missSplash = getMissSplashDamage(result.finalDmg);
+      G.botChar.hp = Math.max(0, G.botChar.hp - missSplash);
+      G.playerDmgDealt += missSplash;
+      logMsg('bot', `♠️ Agent Ace dodges the direct hit from ${card.name} — but takes ${missSplash} splash dmg from the near-miss!`);
     } else {
       G.botChar.hp = Math.max(0, G.botChar.hp - result.finalDmg);
       G.playerDmgDealt += result.finalDmg;
       const rangePct = card.subtype === 'melee'
         ? '(melee)'
-        : `(${dist}/${card.range} rng — ${Math.round(dist / card.range * 100)}% dmg)`;
+        : `(${dist}/${card.range} rng — ${Math.round(getRangeMultiplier(card, dist) * 100)}% dmg)`;
       logMsg('player', `You fire ${card.name} → ${result.finalDmg} dmg ${rangePct}${result.armorNote}.`);
+
+      // Explosive/missile splash — anyone within 1 tile of the target's tile,
+      // including the attacker on a close-range throw, takes 50% splash dmg.
+      if (card.subtype === 'explosive' || card.subtype === 'missile') {
+        const selfSplash = getExplosiveSplashDamage(result.finalDmg, dist);
+        if (selfSplash > 0) {
+          G.playerChar.hp = Math.max(0, G.playerChar.hp - selfSplash);
+          logMsg('player', `💥 ${card.name} catches ${G.playerChar.name} in the blast radius — ${selfSplash} splash dmg!`);
+        }
+      }
     }
 
     card.ammo--;
