@@ -381,12 +381,14 @@ function hpBarColor(pct) {
           const pHere = G.playerPos === idx;
           const bHere = G.botPos === idx;
           const dist = getDistance(G.playerPos, idx);
-          // Fog of war: only the player's own tile and its immediate (1-tile)
-          // radius are visible — this is live, not permanent, so tiles go
-          // dark again once the player moves away. The bot only appears when
-          // it's standing within that same radius, or briefly while a Radar
-          // ping (Tactical Tim) has located it.
-          const revealed = dist <= 1 || (bHere && G.radarPingActive);
+          // Fog of war only applies on Hard & Impossible — on Easy & Medium the whole
+          // arena (including the bot's position) is always visible. On the two harder
+          // difficulties, only the player's own tile and its immediate (1-tile) radius
+          // are visible — live, not permanent, so tiles go dark again once the player
+          // moves away. The bot only appears within that same radius, or briefly while
+          // a Radar ping (Tactical Tim) has located it.
+          const fogEnabled = G.difficulty === 'hard' || G.difficulty === 'impossible';
+          const revealed = !fogEnabled || dist <= 1 || (bHere && G.radarPingActive);
           const botVisible = bHere && revealed;
           if (!revealed) tile.classList.add('fogged');
           if (pHere && botVisible) tile.classList.add('both-here');

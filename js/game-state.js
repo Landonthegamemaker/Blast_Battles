@@ -172,6 +172,18 @@ function initGame() {
   if (hasLoadout) {
     playerHand = ['hand1', 'hand2'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
     playerLoadoutGear = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
+
+    // Pistol Pete: the dual-wield "fire your second pistol free" mechanic is driven
+    // entirely by a shared dualWieldPairId — starterDeck() used to set this up, but
+    // the Equip screen never did, so loadout-built hands need it wired up here too.
+    if (playerChar.attribute === 'dual_wield') {
+      const pairable = playerHand.filter(c => c.type === 'weapon' && (c.subtype === 'pistol' || c.subtype === 'revolver'));
+      if (pairable.length >= 2) {
+        const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
+        pairable[0].dualWieldPairId = pairId;
+        pairable[1].dualWieldPairId = pairId;
+      }
+    }
   } else {
     playerHand = starterDeck(playerChar, weaponDeck, defenseDeck);
     playerLoadoutGear = [];
