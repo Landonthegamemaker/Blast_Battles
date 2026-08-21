@@ -23,6 +23,15 @@ const SHOP_SLOT_LABELS = { all: 'All', hand: 'Hand', head: 'Head', chest: 'Chest
 function openShop() {
   _shopFilterSlot = 'all';
   _setShopMsg('');
+  const banner = document.getElementById('shop-target-banner');
+  const shoppingFor = _currentShopChar();
+  if (shoppingFor && typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId) {
+    const sub = getDesignatedSubtype(shoppingFor.id);
+    banner.style.display = '';
+    banner.innerHTML = `🎯 Shopping for <b>${shoppingFor.name}</b> (locked) — ${sub ? sub.replace('_', ' ') : ''} weapons only`;
+  } else {
+    banner.style.display = 'none';
+  }
   _renderShopTabs();
   _renderShopGrid();
   document.getElementById('shop-overlay').classList.remove('hidden');
@@ -30,6 +39,7 @@ function openShop() {
 
 function closeShop() {
   document.getElementById('shop-overlay').classList.add('hidden');
+  if (typeof _shopTargetCharId !== 'undefined') _shopTargetCharId = null; // one-time override, don't linger
   const equipOverlay = document.getElementById('equip-overlay');
   const charSelectOverlay = document.getElementById('char-select-overlay');
   if (equipOverlay && !equipOverlay.classList.contains('hidden')) {
@@ -90,8 +100,17 @@ function confirmResetProgression() {
   // show it right away instead of waiting for the next char-select visit.
   if (typeof maybeShowTutorial === 'function') maybeShowTutorial();
 }
+function _currentShopChar() {
+  const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
+    || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
+  return (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
+    ? CHARACTER_POOL.find(c => c.id === shoppingForId)
+    : null;
+}
+
 function _renderShopGrid() {
   document.getElementById('shop-credits').textContent = `💰 ${getCredits()}`;
+  const shoppingFor = _currentShopChar();
   const grid = document.getElementById('shop-grid');
   grid.innerHTML = '';
   const items = ALL_EQUIPPABLE
@@ -102,13 +121,19 @@ function _renderShopGrid() {
     const qty = getOwnedQuantity(item.id);
     const owned = qty > 0;
     const sellValue = Math.floor(item.price * 0.5);
-    const locked = item.id !== 'w4' && !hasAnyOwnedItems();
+    const designated = shoppingFor ? getDesignatedSubtype(shoppingFor.id) : null;
+    const wrongSubtype = item.type === 'weapon' && designated && item.subtype !== designated;
+    const onboardingLocked = item.type !== 'weapon' && !hasAnyOwnedItems();
+    const locked = wrongSubtype || onboardingLocked;
+    const lockLabel = wrongSubtype
+      ? `🔒 ${shoppingFor.name} buys ${designated.replace('_', ' ')} only`
+      : onboardingLocked ? '🔒 Buy a weapon first' : '';
     const card = document.createElement('div');
     card.className = 'shop-card' + (owned ? ' owned' : '') + (locked ? ' locked-item' : '');
     card.innerHTML = `
       <div class="sc-icon">${item.icon}</div>
       <div class="sc-name">${item.name}${owned ? ` <span style="color:var(--muted);">×${qty}</span>` : ''}</div>
-      <div class="sc-stat">${locked ? '🔒 Buy an M9 first' : _shopItemStat(item)}</div>
+      <div class="sc-stat">${lockLabel || _shopItemStat(item)}</div>
       <div class="sc-stat" style="color:var(--accent);">💰 ${item.price}${owned ? ` · sell 💰${sellValue}` : ''}</div>
     `;
     const btnRow = document.createElement('div');

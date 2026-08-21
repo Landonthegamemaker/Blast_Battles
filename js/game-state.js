@@ -594,7 +594,7 @@ function playerPlayCard(card) {
 
     // Agent Ace (as bot): 50% dodge vs non-explosive, non-melee
     const aceCanDodge = G.botChar.attribute === 'dodge_bullets'
-      && card.subtype !== 'explosive' && card.subtype !== 'missile' && card.subtype !== 'melee';
+      && card.subtype !== 'explosive' && card.subtype !== 'melee';
     if (aceCanDodge && Math.random() < 0.50) {
       const missSplash = getMissSplashDamage(result.finalDmg);
       G.botChar.hp = Math.max(0, G.botChar.hp - missSplash);
@@ -610,7 +610,7 @@ function playerPlayCard(card) {
 
       // Explosive/missile splash — anyone within 1 tile of the target's tile,
       // including the attacker on a close-range throw, takes 50% splash dmg.
-      if (card.subtype === 'explosive' || card.subtype === 'missile') {
+      if (card.subtype === 'explosive') {
         const selfSplash = getExplosiveSplashDamage(result.finalDmg, dist);
         if (selfSplash > 0) {
           G.playerChar.hp = Math.max(0, G.playerChar.hp - selfSplash);

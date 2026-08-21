@@ -19,7 +19,8 @@
  *   buyItem(itemId)                  → { ok: boolean, reason?: string } — locked to M9-only
  *                                       until hasAnyOwnedItems() is true (see below)
  *   sellItem(itemId)                 → { ok: boolean, reason?: string, refund?: number }
- *   awardMatchCredits(battleScore, difficulty?) → number credits awarded (can be negative)
+ *   awardMatchCredits(battleScore, difficulty?, outcome) → number credits awarded
+ *                                     (outcome: 'win'|'draw'|'loss'|'retreat' — see function docstring)
  *   resetProgression()               → wipes credits/ownership back to defaults (debug/testing)
  *   recordDefeat(charId, difficulty) → marks a win against charId on that difficulty
  *   getDefeatProgress(charId)        → { easy, medium, hard, impossible } booleans
@@ -45,7 +46,14 @@ const STARTING_CREDITS = 100;
 
 // rewards = battleScore × $100 × multiplier — Hard/Impossible pay more for the
 // same performance since they're meaningfully harder to win against.
-const DIFFICULTY_CREDIT_MULTIPLIER = { easy: 0.5, medium: 1.0, hard: 2.0, impossible: 4.0 };
+// Applies to wins and draws. Losses are always $0 (see awardMatchCredits) —
+// losing shouldn't be able to wipe out a saved-up bankroll, only winning less.
+const DIFFICULTY_WIN_MULTIPLIER = { easy: 0.5, medium: 1.0, hard: 2.0, impossible: 4.0 };
+// Retreat still costs something (the early-exit penalty baked into battleScore
+// via computeBattleScore(true)), but at a much gentler scale than a real loss
+// would have — this exists purely to discourage retreat-spamming for free,
+// not to punish retreating as harshly as an actual defeat.
+const DIFFICULTY_RETREAT_MULTIPLIER = { easy: 0.25, medium: 0.5, hard: 1.0, impossible: 2.0 };
 
 function _defaultOwnedMap() {
   const map = {};
@@ -121,12 +129,43 @@ function isOwned(itemId) {
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string }}
  */
+/**
+ * Buys one additional copy of an item. Owning multiple copies is what allows
+ * equipping the same weapon into both hand slots (or both arm slots).
+ *
+ * Weapon purchases are locked to a "shopping-for" character — normally
+ * whichever character is CURRENTLY SELECTED (_selectedCharId), but the
+ * Bestiary can override this to a LOCKED character via _shopTargetCharId
+ * (see char-select.js shopForLockedChar()), since you can only ever *select*
+ * already-unlocked characters — without that override, any subtype not
+ * covered by a starter character could never be purchased by anyone, and
+ * every character needing it would be permanently soft-locked. Each of the
+ * 16 characters has a designated weapon subtype (CHARACTER_DESIGNATED_SUBTYPE
+ * in data.js) and can only buy weapons of that subtype. If no character
+ * context exists at all, purchases aren't subtype-restricted. Armor/gear is
+ * locked until at least one weapon is owned — the original onboarding gate,
+ * unchanged.
+ * @param {string} itemId
+ * @returns {{ ok: boolean, reason?: string }}
+ */
 function buyItem(itemId) {
   const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'Unknown item.' };
-  if (item.type !== 'weapon' && !hasAnyOwnedItems()) {
+
+  if (item.type === 'weapon') {
+    const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
+      || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
+    const shoppingForChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
+      ? CHARACTER_POOL.find(c => c.id === shoppingForId)
+      : null;
+    const designated = shoppingForChar ? getDesignatedSubtype(shoppingForChar.id) : null;
+    if (designated && item.subtype !== designated) {
+      return { ok: false, reason: `${shoppingForChar.name} can only buy ${designated.replace('_', ' ')} weapons.` };
+    }
+  } else if (!hasAnyOwnedItems()) {
     return { ok: false, reason: 'Buy a weapon first — armor and gear unlock after your first purchase.' };
   }
+
   const bal = getCredits();
   if (bal < item.price) return { ok: false, reason: 'Not enough credits.' };
   addCredits(-item.price, `bought ${item.name}`);
@@ -140,13 +179,13 @@ function buyItem(itemId) {
  * Sells one owned copy of an item back for 50% of its price (rounded down).
  *
  * Safeguard: selling a weapon that would leave the player owning ZERO weapons
- * total is blocked UNLESS their credits after the sale can afford a weapon the
- * CURRENTLY SELECTED character can actually equip (if one is selected — falls
- * back to the cheapest weapon anywhere in the game otherwise). This matters:
- * checking only "any weapon in the whole game" isn't a real safety net for a
- * restricted character — e.g. the cheapest weapon overall is a melee weapon,
- * but Pete (pistols/revolvers only) can't equip it, so a balance that only
- * covers that melee weapon would still strand him with zero usable weapons.
+ * total is blocked UNLESS their credits after the sale can afford a weapon of
+ * the CURRENTLY SELECTED character's designated subtype (if one is selected —
+ * falls back to the cheapest weapon anywhere otherwise). This checks the
+ * *purchasable* subtype specifically, not just anything they could equip —
+ * since buyItem() now locks weapon purchases to one subtype per character,
+ * "can afford some other weapon" isn't a real safety net if that other
+ * weapon isn't even something they're allowed to buy going forward.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string, refund?: number }}
  */
@@ -164,21 +203,23 @@ function sellItem(itemId) {
     const sellingLastWeapon = totalWeaponsOwned <= 1; // this is the only weapon unit left, of any kind
     if (sellingLastWeapon) {
       const creditsAfterSale = getCredits() + refund;
-      const selectedChar = (typeof _selectedCharId !== 'undefined' && _selectedCharId && typeof CHARACTER_POOL !== 'undefined')
-        ? CHARACTER_POOL.find(c => c.id === _selectedCharId)
+      const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
+        || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
+      const selectedChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
+        ? CHARACTER_POOL.find(c => c.id === shoppingForId)
         : null;
-      const allowedSubtypes = selectedChar ? getAllowedWeaponSubtypes(selectedChar.attribute) : null;
-      const candidatePool = allowedSubtypes ? WEAPON_POOL.filter(w => allowedSubtypes.includes(w.subtype)) : WEAPON_POOL;
+      const designated = selectedChar ? getDesignatedSubtype(selectedChar.id) : null;
+      const candidatePool = designated ? WEAPON_POOL.filter(w => w.subtype === designated) : WEAPON_POOL;
       const cheapestReplacement = candidatePool.length
         ? candidatePool.reduce((min, w) => (w.price < min.price ? w : min), candidatePool[0])
         : null;
       if (!cheapestReplacement || creditsAfterSale < cheapestReplacement.price) {
-        const who = selectedChar ? ` ${selectedChar.name} can use` : '';
+        const who = selectedChar ? ` ${selectedChar.name} can buy` : '';
         return {
           ok: false,
           reason: cheapestReplacement
             ? `Selling your last weapon would leave you unable to afford a replacement${who} (cheapest is ${cheapestReplacement.name} at $${cheapestReplacement.price}). Buy something else first.`
-            : `Selling your last weapon would leave you with nothing${who} can equip. Buy something else first.`
+            : `Selling your last weapon would leave you with nothing${who}. Buy something else first.`
         };
       }
     }
@@ -199,10 +240,28 @@ function sellItem(itemId) {
  * @param {string} [difficulty] - 'easy'|'medium'|'hard'|'impossible' (defaults to 1x if omitted/unknown)
  * @returns {number} credits awarded (may be negative; balance itself is clamped at 0)
  */
-function awardMatchCredits(battleScore, difficulty) {
-  const multiplier = DIFFICULTY_CREDIT_MULTIPLIER[difficulty] ?? 1.0;
+/**
+ * Awards credits at the end of a match. Outcome-aware:
+ *   - 'win' / 'draw' — scales with Battle Score × difficulty (0.5x/1x/2x/4x), same as before.
+ *   - 'loss'         — always $0. Losing costs nothing; it just doesn't earn anything either.
+ *   - 'retreat'      — scales with Battle Score (already negative from the early-exit penalty)
+ *                       × a much gentler difficulty scale (0.25x/0.5x/1x/2x), just enough to
+ *                       discourage retreat-spamming without punishing it like a real loss.
+ * @param {number} battleScore - The same score shown on the end-game modal
+ *   (see computeBattleScore() in combat.js). Roughly -1.5 to +1.5.
+ * @param {string} [difficulty] - 'easy'|'medium'|'hard'|'impossible' (defaults to 1x if omitted/unknown)
+ * @param {'win'|'draw'|'loss'|'retreat'} outcome
+ * @returns {number} credits awarded (retreat can be negative; balance itself is clamped at 0)
+ */
+function awardMatchCredits(battleScore, difficulty, outcome) {
+  if (outcome === 'loss') {
+    addCredits(0, `loss — no penalty (${difficulty || 'unknown'})`);
+    return 0;
+  }
+  const table = outcome === 'retreat' ? DIFFICULTY_RETREAT_MULTIPLIER : DIFFICULTY_WIN_MULTIPLIER;
+  const multiplier = table[difficulty] ?? 1.0;
   const amount = Math.round(100 * battleScore * multiplier);
-  addCredits(amount, `battle score ${battleScore.toFixed(3)} × ${multiplier} (${difficulty || 'unknown'})`);
+  addCredits(amount, `${outcome || 'match'} — battle score ${battleScore.toFixed(3)} × ${multiplier} (${difficulty || 'unknown'})`);
   return amount;
 }
 
@@ -263,10 +322,28 @@ function getDefeatProgress(charId) {
  * @param {string} charId
  * @returns {boolean}
  */
+/**
+ * A locked character unlocks once BOTH are true:
+ *   1. You've won against them, as the bot opponent, on all 4 difficulties.
+ *   2. You own at least one weapon of their designated subtype (see
+ *      CHARACTER_DESIGNATED_SUBTYPE in data.js) — proving you're actually
+ *      equipped to play them, not just that you've beaten them somewhere.
+ */
 function isCharUnlocked(charId) {
   if (typeof STARTER_UNLOCKED_IDS !== 'undefined' && STARTER_UNLOCKED_IDS.includes(charId)) return true;
   const progress = getDefeatProgress(charId);
-  return DIFFICULTY_LEVELS.every(d => progress[d]);
+  const defeatedAll = DIFFICULTY_LEVELS.every(d => progress[d]);
+  if (!defeatedAll) return false;
+  const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
+  if (!designated) return true; // no subtype assigned — defeat requirement alone is enough
+  return getOwnedQuantity ? _ownsAnyOfSubtype(designated) : true;
+}
+
+/** True if the player owns at least one unit of any weapon with the given subtype. */
+function _ownsAnyOfSubtype(subtype) {
+  if (typeof WEAPON_POOL === 'undefined') return true;
+  const map = _loadOwned();
+  return WEAPON_POOL.some(w => w.subtype === subtype && (map[w.id] || 0) > 0);
 }
 
 /** Debug helper — wipes progression back to defaults. Not wired to any UI button by default. */

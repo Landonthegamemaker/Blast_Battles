@@ -233,7 +233,7 @@ function impossibleBotPlayPhase() {
                     const res = applyPlayerArmor(dmg, card);
                     // Agent Ace: 50% dodge vs non-explosive, non-melee weapons — all phases
                     const aceCanDodge = G.playerChar.attribute === 'dodge_bullets'
-                        && card.subtype !== 'explosive' && card.subtype !== 'missile' && card.subtype !== 'melee';
+                        && card.subtype !== 'explosive' && card.subtype !== 'melee';
                     if (aceCanDodge && Math.random() < 0.50) {
                         logMsg('player', `♠️ Agent Ace dodges ${card.name}!`);
                     } else {
@@ -468,7 +468,7 @@ function _botFireWeapon(weapon, dist) {
     const result = applyPlayerArmor(dmg, weapon);
     // Agent Ace: 50% dodge vs non-explosive, non-melee weapons — all phases
     const aceCanDodge = G.playerChar.attribute === 'dodge_bullets'
-        && weapon.subtype !== 'explosive' && weapon.subtype !== 'missile' && weapon.subtype !== 'melee';
+        && weapon.subtype !== 'explosive' && weapon.subtype !== 'melee';
     if (aceCanDodge && Math.random() < 0.50) {
         logMsg('player', `♠️ Agent Ace dodges ${weapon.name}!`);
     } else {

@@ -104,11 +104,23 @@ function _isDefenseItemBlocked(char, item) {
   return false;
 }
 
-/** True if a weapon-type item is off-limits for this character's attribute. */
+/**
+ * True if a weapon-type item is off-limits for this character. Checks both:
+ *   - the legacy hard equip restriction (WEAPON_ATTRIBUTE_RESTRICTIONS, 4 characters,
+ *     e.g. Pete allows pistol OR revolver)
+ *   - the newer designated-subtype system (all 16 characters, exactly one subtype each)
+ * The designated subtype is the one that actually matters going forward, since
+ * buyItem() only lets you acquire weapons of your designated subtype in the first
+ * place — this just makes sure the Equip picker can't offer anything you could
+ * never have bought (e.g. a revolver someone owned before this system existed).
+ */
 function _isWeaponItemBlocked(char, item) {
   if (item.type !== 'weapon' || !char) return false;
   const allowed = getAllowedWeaponSubtypes(char.attribute);
-  return !!(allowed && !allowed.includes(item.subtype));
+  if (allowed && !allowed.includes(item.subtype)) return true;
+  const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(char.id) : null;
+  if (designated && item.subtype !== designated) return true;
+  return false;
 }
 
 /**

@@ -156,19 +156,29 @@ function makeCharCard(char) {
 }
 
 // ── Bestiary (view-only) ─────────────────────────────────────────────────────
-// Shows a locked character's per-difficulty progress. Purely informational —
-// actually picking who to fight now always happens via Opponent Select (see
-// below), reached after Equip, which works the same for locked AND unlocked
-// opponents. This avoids the earlier bug where challenging required a
-// character to already be selected, and going back to fix that wiped the
-// selection, trapping players in a loop between the two screens.
+// Shows a locked character's per-difficulty progress AND their designated
+// weapon subtype, with a way to shop for that subtype specifically — this is
+// the only way to ever buy toward unlocking a LOCKED character, since you can
+// only ever *select* already-unlocked characters. Without this, any subtype
+// not covered by a starter character would be permanently unpurchasable and
+// every character needing it would be soft-locked forever.
 const DIFFICULTY_LABELS = { easy: '🟢 Easy', medium: '🟡 Medium', hard: '🔴 Hard', impossible: '🤖 Impossible' };
+
+// Who the Shop's subtype-lock currently applies to. Normally mirrors
+// _selectedCharId, but shopForLockedChar() below can override it to a LOCKED
+// character so their subtype becomes purchasable — reset back to null (falls
+// back to _selectedCharId) whenever the shop is closed, so it's a one-time
+// override per visit, not a lingering state that could confuse a later visit.
+let _shopTargetCharId = null;
 
 function openBestiary(charId) {
     const char = CHARACTER_POOL.find(c => c.id === charId);
     if (!char) return;
     const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(charId) : {};
     const glowColor = char.faction === 'hero' ? 'var(--hero)' : 'var(--villain)';
+    const subtype = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
+    const subtypeLabel = subtype ? subtype.replace('_', ' ') : 'unassigned';
+    const owns = subtype && typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(subtype) : false;
 
     let rows = '';
     for (const diff of ['easy', 'medium', 'hard', 'impossible']) {
@@ -185,10 +195,23 @@ function openBestiary(charId) {
       <h2 style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.1rem;color:${glowColor};margin:0;">${char.name}</h2>
     </div>
     <div style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">${char.faction.toUpperCase()} · LOCKED</div>
-    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:10px;">Win against ${char.name} on every difficulty to unlock them. You can fight them as an opponent — pick your own character, gear up, then choose them from the opponent list — even before they're unlocked.</div>
+    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning a ${subtypeLabel} weapon.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px;background:${owns ? 'rgba(68,255,136,0.06)' : 'rgba(232,184,75,0.06)'};">
+      <span style="font-size:0.7rem;">🔫 Own a ${subtypeLabel} weapon</span>
+      <span style="font-size:0.7rem;color:${owns ? 'var(--green)' : 'var(--accent)'};">${owns ? '✓ OWNED' : 'NOT YET'}</span>
+    </div>
+    ${!owns && subtype ? `<button class="btn primary" style="width:100%;margin-bottom:10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop for ${subtypeLabel}</button>` : ''}
     ${rows}
   `;
     document.getElementById('bestiary-overlay').classList.remove('hidden');
+}
+
+/** Opens the Shop pre-authorized to buy the given LOCKED character's designated
+ *  subtype, since they can't be _selectedCharId (not unlocked) to unlock it normally. */
+function shopForLockedChar(charId) {
+    _shopTargetCharId = charId;
+    closeBestiary();
+    openShop();
 }
 
 function closeBestiary() {

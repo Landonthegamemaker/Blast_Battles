@@ -127,7 +127,7 @@ function applyPlayerWeaponBuff(dmg, card) {
   if (attr === 'shotgun_specialist'  && sub === 'shotgun')                                   return Math.ceil(dmg * 1.3);
   if (attr === 'rifle_specialist'    && (sub === 'assault_rifle' || sub === 'sniper'))       return Math.ceil(dmg * 1.25);
   if (attr === 'sniper_specialist'   && sub === 'sniper')                                    return Math.ceil(dmg * 1.33);
-  if (attr === 'explosive_specialist'&& (sub === 'explosive' || sub === 'missile'))          return Math.ceil(dmg * 1.35);
+  if (attr === 'explosive_specialist'&& sub === 'explosive')          return Math.ceil(dmg * 1.35);
   if (attr === 'melee_specialist'    && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
   if (attr === 'swift_melee'         && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
   return dmg;
@@ -151,7 +151,7 @@ function applyBotWeaponBuff(dmg, card) {
   if (attr === 'shotgun_specialist'  && sub === 'shotgun')                                   return Math.ceil(dmg * 1.3);
   if (attr === 'rifle_specialist'    && (sub === 'assault_rifle' || sub === 'sniper'))       return Math.ceil(dmg * 1.25);
   if (attr === 'sniper_specialist'   && sub === 'sniper')                                    return Math.ceil(dmg * 1.35);
-  if (attr === 'explosive_specialist'&& (sub === 'explosive' || sub === 'missile'))          return Math.ceil(dmg * 1.35);
+  if (attr === 'explosive_specialist'&& sub === 'explosive')          return Math.ceil(dmg * 1.35);
   if (attr === 'melee_specialist'    && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
   if (attr === 'swift_melee'         && sub === 'melee')                                     return Math.ceil(dmg * 1.4);
   return dmg;
@@ -203,7 +203,7 @@ function applyBotArmor(dmg, attackingCard) {
       reduction = Math.ceil(reduction * 1.25);
     if (G.botChar.attribute === 'sniper_resist' && attackingCard.subtype === 'sniper')
       reduction = Math.ceil(dmg * 0.5);
-    if (G.botChar.attribute === 'run_and_gun' && (attackingCard.subtype === 'explosive' || attackingCard.subtype === 'missile'))
+    if (G.botChar.attribute === 'run_and_gun' && attackingCard.subtype === 'explosive')
       reduction = Math.ceil(dmg * 0.4);
     const actualReduction = Math.min(finalDmg, reduction);
     finalDmg -= actualReduction;
@@ -238,7 +238,7 @@ function applyPlayerArmor(dmg, attackingCard) {
       reduction = Math.ceil(reduction * 1.25);
     if (G.playerChar.attribute === 'sniper_resist' && attackingCard.subtype === 'sniper')
       reduction = Math.ceil(dmg * 0.5);
-    if (G.playerChar.attribute === 'run_and_gun' && (attackingCard.subtype === 'explosive' || attackingCard.subtype === 'missile'))
+    if (G.playerChar.attribute === 'run_and_gun' && attackingCard.subtype === 'explosive')
       reduction = Math.ceil(dmg * 0.4);
     const actualReduction = Math.min(finalDmg, reduction);
     finalDmg -= actualReduction;
