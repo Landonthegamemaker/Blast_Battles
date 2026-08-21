@@ -122,7 +122,7 @@ function _renderShopGrid() {
     const owned = qty > 0;
     const sellValue = Math.floor(item.price * 0.5);
     const designated = shoppingFor ? getDesignatedSubtype(shoppingFor.id) : null;
-    const wrongSubtype = item.type === 'weapon' && designated && item.subtype !== designated;
+    const wrongSubtype = item.type === 'weapon' && designated && designated !== 'any' && item.subtype !== designated;
     const onboardingLocked = item.type !== 'weapon' && !hasAnyOwnedItems();
     const locked = wrongSubtype || onboardingLocked;
     const lockLabel = wrongSubtype

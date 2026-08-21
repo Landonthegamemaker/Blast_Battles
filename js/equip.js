@@ -22,19 +22,23 @@
  * there's no real conflict in two characters' loadouts both pointing at it.
  *
  * Exports (browser globals):
- *   PlayerLoadout        — { head, chest, legs, feet, armL, armR, hand1, hand2 } (item ids or null)
+ *   PlayerLoadout        — { head, chest, legs, feetL, feetR, armL, armR, hand1, hand2 } (item ids or null)
  *                           always mirrors the currently-selected character
  *   showEquipScreen()    — called from char-select.js on confirm; loads that character's saved loadout
  *   openSlotPicker(slot) — shows owned items for a slot in the side panel
- *   confirmEquip()       — validates (needs at least 1 hand item) and proceeds to Opponent Select
+ *   confirmEquip()       — validates (needs at least 1 hand item + a valid foot pair) and proceeds to Opponent Select
  *   backToCharSelect()   — returns to character select; current loadout is already saved
  *
  * ── Rules enforced here ─────────────────────────────────────────────────
  *   - Weapon restrictions: a character with a restricted attribute (e.g. Lunging Logan —
  *     melee only) can't put a disallowed weapon in a hand slot.
- *   - 2-armor cap: head/chest/legs/feet/armL/armR are all armor. At most 2 of those
- *     6 slots may be filled at once, same as the in-match "2 equipped defense items
- *     max" rule.
+ *   - 2-armor cap: head/chest/legs/feet(as one unit)/armL/armR. At most 2 of those
+ *     armor units may be filled at once, same as the in-match "2 equipped defense
+ *     items max" rule.
+ *   - Footwear must be a matched pair: feetL and feetR always hold the SAME item
+ *     (or both empty) — picking one auto-syncs the other when you own a spare
+ *     unit; Begin Battle is blocked with a clear message if they end up mismatched
+ *     (e.g. you only owned 1 and later sold your loadout partner elsewhere).
  *   - Quantity cap: an item can occupy multiple slots on ONE character only up to how
  *     many copies you own — own 1, it locks everywhere else once placed; own 2+, it
  *     stays available for a second slot.
@@ -48,14 +52,14 @@ const LOADOUTS_KEY = 'bb-loadouts';
 
 // Which ALL_EQUIPPABLE `.slot` value each paperdoll slot pulls from.
 const EQUIP_SLOT_POOL = {
-  head: 'head', chest: 'chest', legs: 'legs', feet: 'feet',
+  head: 'head', chest: 'chest', legs: 'legs', feetL: 'feet', feetR: 'feet',
   armL: 'arm', armR: 'arm', hand1: 'hand', hand2: 'hand',
 };
-const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'];
+const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feetL', 'feetR', 'armL', 'armR'];
 const ALL_SLOTS = [...ARMOR_SLOTS, 'hand1', 'hand2'];
 
 function _emptyLoadout() {
-  return { head: null, chest: null, legs: null, feet: null, armL: null, armR: null, hand1: null, hand2: null };
+  return { head: null, chest: null, legs: null, feetL: null, feetR: null, armL: null, armR: null, hand1: null, hand2: null };
 }
 
 let PlayerLoadout = _emptyLoadout();
@@ -90,9 +94,19 @@ function _currentPlayerChar() {
     : null;
 }
 
-/** How many of the 6 armor slots (other than `excludeSlot`) currently hold an item. */
+/**
+ * How many "armor units" (other than `excludeSlot`) currently hold an item,
+ * toward the 2-max cap. head/chest/legs/armL/armR each count individually —
+ * feetL+feetR count as exactly ONE unit between them, since footwear is
+ * always a matched pair (one conceptual item, split across two visual
+ * slots), not two independent choices the way arms are.
+ */
 function _armorSlotsFilledCount(excludeSlot = null) {
-  return ARMOR_SLOTS.filter(s => s !== excludeSlot && PlayerLoadout[s]).length;
+  const singleSlots = ['head', 'chest', 'legs', 'armL', 'armR'];
+  let count = singleSlots.filter(s => s !== excludeSlot && PlayerLoadout[s]).length;
+  const excludingFeet = excludeSlot === 'feetL' || excludeSlot === 'feetR';
+  if (!excludingFeet && (PlayerLoadout.feetL || PlayerLoadout.feetR)) count++;
+  return count;
 }
 
 /** True if a defense-type item is one this character can never actually play in-match. */
@@ -119,7 +133,7 @@ function _isWeaponItemBlocked(char, item) {
   const allowed = getAllowedWeaponSubtypes(char.attribute);
   if (allowed && !allowed.includes(item.subtype)) return true;
   const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(char.id) : null;
-  if (designated && item.subtype !== designated) return true;
+  if (designated && designated !== 'any' && item.subtype !== designated) return true;
   return false;
 }
 
@@ -259,26 +273,59 @@ function openSlotPicker(slot) {
   }
 }
 
-function _pickSlotItem(slot, itemId) {
-  PlayerLoadout[slot] = itemId;
-  _saveCurrentLoadout();
+function _refreshSlotButton(slot) {
   const btn = document.querySelector(`.equip-slot[data-slot="${slot}"]`);
-  const item = itemId ? ALL_EQUIPPABLE.find(i => i.id === itemId) : null;
+  if (!btn) return;
+  const item = PlayerLoadout[slot] ? ALL_EQUIPPABLE.find(i => i.id === PlayerLoadout[slot]) : null;
   btn.classList.toggle('filled', !!item);
   btn.querySelector('.equip-slot-icon').textContent = item ? item.icon : '➕';
+}
+
+/** True if feet are a valid matched pair — both empty, or both the same item. */
+function _feetPairValid() {
+  return PlayerLoadout.feetL === PlayerLoadout.feetR;
+}
+
+function _pickSlotItem(slot, itemId) {
+  PlayerLoadout[slot] = itemId;
+
+  if (slot === 'feetL' || slot === 'feetR') {
+    // Footwear is always a matched pair — auto-sync the other foot when there's
+    // a spare unit available; otherwise leave it empty (confirmEquip() blocks
+    // proceeding until the pair actually matches).
+    const otherFoot = slot === 'feetL' ? 'feetR' : 'feetL';
+    if (itemId === null) {
+      PlayerLoadout[otherFoot] = null;
+    } else {
+      const usedElsewhere = ALL_SLOTS.filter(s => s !== otherFoot && PlayerLoadout[s] === itemId).length;
+      const ownedQty = getOwnedQuantity(itemId);
+      PlayerLoadout[otherFoot] = (ownedQty - usedElsewhere > 0) ? itemId : null;
+    }
+    _refreshSlotButton('feetL');
+    _refreshSlotButton('feetR');
+  } else {
+    _refreshSlotButton(slot);
+  }
+
+  _saveCurrentLoadout();
   openSlotPicker(slot); // re-render so "selected"/locked states update
   _updateEquipConfirmState();
 }
 
 function _updateEquipConfirmState() {
   const btn = document.getElementById('equip-confirm-btn');
-  const ready = !!(PlayerLoadout.hand1 || PlayerLoadout.hand2);
+  const hasHand = !!(PlayerLoadout.hand1 || PlayerLoadout.hand2);
+  const ready = hasHand && _feetPairValid();
   btn.style.opacity = ready ? '1' : '0.5';
   btn.style.pointerEvents = ready ? 'auto' : 'none';
 }
 
 function confirmEquip() {
   if (!PlayerLoadout.hand1 && !PlayerLoadout.hand2) return;
+  if (!_feetPairValid()) {
+    alert("Your feet need a matching pair — equip the same footwear on both, or leave both empty. You may need to buy a second copy.");
+    return;
+  }
   document.getElementById('equip-overlay').classList.add('hidden');
   showOpponentSelect();
 }

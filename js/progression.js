@@ -159,7 +159,7 @@ function buyItem(itemId) {
       ? CHARACTER_POOL.find(c => c.id === shoppingForId)
       : null;
     const designated = shoppingForChar ? getDesignatedSubtype(shoppingForChar.id) : null;
-    if (designated && item.subtype !== designated) {
+    if (designated && designated !== 'any' && item.subtype !== designated) {
       return { ok: false, reason: `${shoppingForChar.name} can only buy ${designated.replace('_', ' ')} weapons.` };
     }
   } else if (!hasAnyOwnedItems()) {
@@ -209,7 +209,7 @@ function sellItem(itemId) {
         ? CHARACTER_POOL.find(c => c.id === shoppingForId)
         : null;
       const designated = selectedChar ? getDesignatedSubtype(selectedChar.id) : null;
-      const candidatePool = designated ? WEAPON_POOL.filter(w => w.subtype === designated) : WEAPON_POOL;
+      const candidatePool = (designated && designated !== 'any') ? WEAPON_POOL.filter(w => w.subtype === designated) : WEAPON_POOL;
       const cheapestReplacement = candidatePool.length
         ? candidatePool.reduce((min, w) => (w.price < min.price ? w : min), candidatePool[0])
         : null;
@@ -328,6 +328,8 @@ function getDefeatProgress(charId) {
  *   2. You own at least one weapon of their designated subtype (see
  *      CHARACTER_DESIGNATED_SUBTYPE in data.js) — proving you're actually
  *      equipped to play them, not just that you've beaten them somewhere.
+ *      Firearms specialists (designated subtype 'any' — Tracy Guns, The
+ *      Shadow) need one weapon of EVERY subtype instead of just one.
  */
 function isCharUnlocked(charId) {
   if (typeof STARTER_UNLOCKED_IDS !== 'undefined' && STARTER_UNLOCKED_IDS.includes(charId)) return true;
@@ -336,7 +338,8 @@ function isCharUnlocked(charId) {
   if (!defeatedAll) return false;
   const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
   if (!designated) return true; // no subtype assigned — defeat requirement alone is enough
-  return getOwnedQuantity ? _ownsAnyOfSubtype(designated) : true;
+  if (designated === 'any') return _ownsAllSubtypes();
+  return _ownsAnyOfSubtype(designated);
 }
 
 /** True if the player owns at least one unit of any weapon with the given subtype. */
@@ -344,6 +347,12 @@ function _ownsAnyOfSubtype(subtype) {
   if (typeof WEAPON_POOL === 'undefined') return true;
   const map = _loadOwned();
   return WEAPON_POOL.some(w => w.subtype === subtype && (map[w.id] || 0) > 0);
+}
+
+/** True if the player owns at least one weapon of EVERY real subtype (for 'any' characters). */
+function _ownsAllSubtypes() {
+  if (typeof ALL_WEAPON_SUBTYPES === 'undefined') return true;
+  return ALL_WEAPON_SUBTYPES.every(sub => _ownsAnyOfSubtype(sub));
 }
 
 /** Debug helper — wipes progression back to defaults. Not wired to any UI button by default. */

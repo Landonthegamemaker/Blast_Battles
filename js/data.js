@@ -79,7 +79,7 @@ const WEAPON_POOL_BASE = [
   { id: 'w22', name: 'Stinger SAM', type: 'weapon', subtype: 'explosive', damage: 85, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand' },
   { id: 'w23', name: 'Javelin', type: 'weapon', subtype: 'explosive', damage: 115, ammo: 1, speed: 'charged', range: 2, icon: '🚀', slot: 'hand' },
   // Melee (range 0)
-  { id: 'w24', name: 'Combat Knife', type: 'weapon', subtype: 'melee', damage: 30, ammo: 8, speed: 'fast', range: 0, icon: '🗡️', slot: 'hand' },
+  { id: 'w24', name: 'Combat Knife', type: 'weapon', subtype: 'melee', damage: 30, ammo: 10, speed: 'fast', range: 0, icon: '🗡️', slot: 'hand' },
   { id: 'w25', name: 'War Hammer', type: 'weapon', subtype: 'melee', damage: 60, ammo: 4, speed: 'slow', range: 0, icon: '⚔️', slot: 'hand' },
   { id: 'w26', name: 'Katana', type: 'weapon', subtype: 'melee', damage: 56, ammo: 6, speed: 'medium', range: 0, icon: '⚔️', slot: 'hand' },
   { id: 'w27', name: 'Chainsaw', type: 'weapon', subtype: 'melee', damage: 75, ammo: 3, speed: 'slow', range: 0, icon: '⚙️', slot: 'hand' },
@@ -95,38 +95,38 @@ const WEAPON_POOL_BASE = [
   // onto existing categories: SMG/Machine Gun/Machine Pistol → their closest fit,
   // Laser Cannon → missile (heavy single-charge weapon), Marksman/Sniper Rifle → sniper.
   // 1-star
-  { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 3, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w32', name: 'Simple Striker', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 2, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w34', name: 'One Shot Wonder', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 1, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w35', name: 'Clover Charm', type: 'weapon', subtype: 'pistol', damage: 3, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 3, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w32', name: 'Simple Striker', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 16, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w34', name: 'One Shot Wonder', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 1, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w35', name: 'Clover Charm', type: 'weapon', subtype: 'pistol', damage: 24, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
   // 2-star
-  { id: 'w36', name: 'Fast Fire', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w37', name: 'Zig Zag', type: 'weapon', subtype: 'smg', damage: 4, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w38', name: 'Pulse Twins', type: 'weapon', subtype: 'pistol', damage: 2, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w39', name: 'Even Steven', type: 'weapon', subtype: 'shotgun', damage: 4, ammo: 2, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
-  { id: 'w40', name: 'Rattler Ranger', type: 'weapon', subtype: 'revolver', damage: 5, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w36', name: 'Fast Fire', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w37', name: 'Zig Zag', type: 'weapon', subtype: 'smg', damage: 32, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w38', name: 'Pulse Twins', type: 'weapon', subtype: 'pistol', damage: 16, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w39', name: 'Even Steven', type: 'weapon', subtype: 'shotgun', damage: 32, ammo: 2, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w40', name: 'Rattler Ranger', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   // 3-star
-  { id: 'w41', name: 'Odd Todd', type: 'weapon', subtype: 'pistol', damage: 3, ammo: 7, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w42', name: 'Zap Cannon', type: 'weapon', subtype: 'assault_rifle', damage: 3, ammo: 4, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
-  { id: 'w43', name: 'Triple Threat', type: 'weapon', subtype: 'shotgun', damage: 6, ammo: 3, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
-  { id: 'w44', name: 'Magnificent Six', type: 'weapon', subtype: 'revolver', damage: 6, ammo: 6, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w45', name: 'Speed Demon', type: 'weapon', subtype: 'smg', damage: 4, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w41', name: 'Odd Todd', type: 'weapon', subtype: 'pistol', damage: 24, ammo: 7, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w42', name: 'Zap Cannon', type: 'weapon', subtype: 'assault_rifle', damage: 24, ammo: 4, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w43', name: 'Triple Threat', type: 'weapon', subtype: 'shotgun', damage: 48, ammo: 3, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w44', name: 'Magnificent Six', type: 'weapon', subtype: 'revolver', damage: 48, ammo: 6, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w45', name: 'Speed Demon', type: 'weapon', subtype: 'smg', damage: 32, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   // 4-star
-  { id: 'w46', name: 'Sweet Revenge', type: 'weapon', subtype: 'assault_rifle', damage: 5, ammo: 5, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
-  { id: 'w47', name: 'Tactical Strike', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 8, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
-  { id: 'w48', name: 'Ranged Rifle', type: 'weapon', subtype: 'sniper', damage: 7, ammo: 8, speed: 'medium', range: 3, icon: '🎯', slot: 'hand' },
-  { id: 'w49', name: 'Heat Hawk', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w50', name: 'Supreme Scope', type: 'weapon', subtype: 'sniper', damage: 9, ammo: 6, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
-  { id: 'w51', name: 'Atomic Boom', type: 'weapon', subtype: 'explosive', damage: 10, ammo: 1, speed: 'charged', range: 1, icon: '💣', slot: 'hand' },
+  { id: 'w46', name: 'Sweet Revenge', type: 'weapon', subtype: 'assault_rifle', damage: 40, ammo: 5, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w47', name: 'Tactical Strike', type: 'weapon', subtype: 'assault_rifle', damage: 48, ammo: 8, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w48', name: 'Ranged Rifle', type: 'weapon', subtype: 'sniper', damage: 56, ammo: 8, speed: 'medium', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w49', name: 'Heat Hawk', type: 'weapon', subtype: 'pistol', damage: 64, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w50', name: 'Supreme Scope', type: 'weapon', subtype: 'sniper', damage: 72, ammo: 6, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w51', name: 'Atomic Boom', type: 'weapon', subtype: 'explosive', damage: 80, ammo: 1, speed: 'charged', range: 1, icon: '💣', slot: 'hand' },
   // 5-star
-  { id: 'w52', name: 'Ion Cannon', type: 'weapon', subtype: 'explosive', damage: 8, ammo: 1, speed: 'medium', range: 2, icon: '🚀', slot: 'hand' },
-  { id: 'w53', name: 'Master Blaster', type: 'weapon', subtype: 'assault_rifle', damage: 7, ammo: 10, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
-  { id: 'w54', name: 'Big Bertha', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 14, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w52', name: 'Ion Cannon', type: 'weapon', subtype: 'explosive', damage: 64, ammo: 1, speed: 'medium', range: 2, icon: '🚀', slot: 'hand' },
+  { id: 'w53', name: 'Master Blaster', type: 'weapon', subtype: 'assault_rifle', damage: 56, ammo: 10, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w54', name: 'Big Bertha', type: 'weapon', subtype: 'assault_rifle', damage: 48, ammo: 14, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
   // Unrated (revolver-heavy set)
-  { id: 'w55', name: 'Lever King', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 5, speed: 'charged', range: 2, icon: '🎯', slot: 'hand' },
-  { id: 'w56', name: 'Raging Rhino', type: 'weapon', subtype: 'revolver', damage: 7, ammo: 4, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w57', name: 'Judgement Day', type: 'weapon', subtype: 'revolver', damage: 9, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w55', name: 'Lever King', type: 'weapon', subtype: 'assault_rifle', damage: 48, ammo: 5, speed: 'charged', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w56', name: 'Raging Rhino', type: 'weapon', subtype: 'revolver', damage: 56, ammo: 4, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w57', name: 'Judgement Day', type: 'weapon', subtype: 'revolver', damage: 72, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
 ];
 // Weapon price = (damage + ammo) × (range + REV_SPEED_FACTOR[speed]).
 // REV_SPEED_FACTOR runs Charged(4) > Slow(3) > Medium(2) > Fast(1) — heavier,
@@ -243,25 +243,32 @@ function getAllowedWeaponSubtypes(attribute) {
 // difficulties) to unlock a locked character. Explosive absorbed Missile —
 // they were similar enough to just be one category, so no weapon has
 // subtype 'missile' anymore (see WEAPON_POOL, all reclassified to 'explosive').
+const ALL_WEAPON_SUBTYPES = ['pistol', 'revolver', 'shotgun', 'assault_rifle', 'sniper', 'explosive', 'melee', 'smg'];
+
+// 'any' is a special value — a firearms specialist who can buy/equip every
+// subtype, not just one. Only Tracy Guns and The Shadow carry it. Unlocking
+// an 'any' character is correspondingly harder: own at least one weapon of
+// EVERY subtype, not just one (see isCharUnlocked() in progression.js).
 const CHARACTER_DESIGNATED_SUBTYPE = {
   c1: 'pistol',         // Pistol Pete
   c2: 'shotgun',        // Iron Titan
   c3: 'melee',          // Lunging Logan
   c4: 'melee',          // Macy the Medic
-  c5: 'assault_rifle',  // Toxic Trooper
+  c5: 'smg',            // Toxic Trooper
   c6: 'smg',            // Sprinting Sue
   c7: 'sniper',         // Commando Cole
-  c8: 'smg',            // The Shadow
+  c8: 'any',            // The Shadow — firearms specialist, mirrors Tracy's rule
   c9: 'revolver',       // Cowboy Clint
   c10: 'shotgun',       // Sentinel Sam
-  c11: 'explosive',     // Tracy Guns
+  c11: 'any',           // Tracy Guns — firearms specialist, "any gun"
   c12: 'sniper',        // Huntress Hellena
   c13: 'pistol',        // Tactical Tim
-  c14: 'assault_rifle', // Ranger Kate
+  c14: 'assault_rifle', // Ranger Kate — her rifle_specialist damage bonus also covers sniper (see combat.js)
   c15: 'explosive',     // Hank the Tank
   c16: 'revolver',      // Agent Ace
 };
-/** Returns the designated weapon subtype for a character id, or null if unassigned. */
+/** Returns the designated weapon subtype for a character id ('any' for firearms
+ *  specialists), or null if unassigned. */
 function getDesignatedSubtype(charId) {
   return CHARACTER_DESIGNATED_SUBTYPE[charId] || null;
 }
@@ -291,23 +298,23 @@ const STARTER_CHARACTER_IDS = ['c7', 'c5']; // Commando Cole (hero), Toxic Troop
 // ── Character cards (16: 8 heroes, 8 villains) ──────────────────────────────
 const CHARACTER_POOL = [
   // Heroes
-  { id: 'c1', name: 'Pistol Pete', type: 'character', faction: 'hero', hp: 170, maxHp: 170, speed: 8, attribute: 'dual_wield', attrDesc: 'Dual Wield · Pistols & Revolvers only', icon: '🔫🔫', img: 'img/char/pistol_pete.png' },
-  { id: 'c4', name: 'Macy the Medic', type: 'character', faction: 'hero', hp: 160, maxHp: 160, speed: 9, attribute: 'healing', attrDesc: 'Healing +40% eff · Cardinal moves only', icon: '🩺', img: 'img/char/macy_the_medic.png' },
-  { id: 'c6', name: 'Sprinting Sue', type: 'character', faction: 'hero', hp: 150, maxHp: 150, speed: 10, attribute: 'swift', attrDesc: 'Move 2 spaces · Fast phase only', icon: '🏃‍♀️', img: 'img/char/sprinting_sue.png' },
-  { id: 'c7', name: 'Commando Cole', type: 'character', faction: 'hero', hp: 180, maxHp: 180, speed: 7, attribute: 'run_and_gun', attrDesc: 'Run & Gun · Must move to Attack', icon: '😎', img: 'img/char/commando_cole.png' },
-  { id: 'c10', name: 'Sentinel Sam', type: 'character', faction: 'hero', hp: 230, maxHp: 230, speed: 2, attribute: 'shotgun_specialist', attrDesc: 'Shotgun +40% dmg · Moves Slow & Charged only', icon: '🛡️', img: 'img/char/sentinel_sam.png' },
-  { id: 'c11', name: 'Tracy Guns', type: 'character', faction: 'hero', hp: 160, maxHp: 160, speed: 9, attribute: 'extra_carry', attrDesc: 'Hold 5 weapons · No defense cards', icon: '🔥', img: 'img/char/tracy_guns.png' },
-  { id: 'c14', name: 'Ranger Kate', type: 'character', faction: 'hero', hp: 190, maxHp: 190, speed: 6, attribute: 'rifle_specialist', attrDesc: 'Rifle +25% dmg · Rifles only', icon: '🪖', img: 'img/char/ranger_kate.png' },
-  { id: 'c16', name: 'Agent Ace', type: 'character', faction: 'hero', hp: 150, maxHp: 150, speed: 10, attribute: 'dodge_bullets', attrDesc: "50% chance to dodge bullets · Can't dodge Explosive, Missile, or Melee", icon: '♠️', img: 'img/char/agent_ace.png' },
+  { id: 'c1', name: 'Pistol Pete', type: 'character', faction: 'hero', hp: 170, maxHp: 170, speed: 8, attribute: 'dual_wield', attrDesc: 'Dual Wield · Pistol only', icon: '🔫🔫', img: 'img/char/pistol_pete.png' },
+  { id: 'c4', name: 'Macy the Medic', type: 'character', faction: 'hero', hp: 160, maxHp: 160, speed: 9, attribute: 'healing', attrDesc: 'Healing +40% eff · Melee only', icon: '🩺', img: 'img/char/macy_the_medic.png' },
+  { id: 'c6', name: 'Sprinting Sue', type: 'character', faction: 'hero', hp: 150, maxHp: 150, speed: 10, attribute: 'swift', attrDesc: 'Move 2 spaces · SMG only', icon: '🏃‍♀️', img: 'img/char/sprinting_sue.png' },
+  { id: 'c7', name: 'Commando Cole', type: 'character', faction: 'hero', hp: 180, maxHp: 180, speed: 7, attribute: 'run_and_gun', attrDesc: 'Run & Gun · Sniper only', icon: '😎', img: 'img/char/commando_cole.png' },
+  { id: 'c10', name: 'Sentinel Sam', type: 'character', faction: 'hero', hp: 230, maxHp: 230, speed: 2, attribute: 'shotgun_specialist', attrDesc: 'Shotgun +40% dmg · Shotgun only', icon: '🛡️', img: 'img/char/sentinel_sam.png' },
+  { id: 'c11', name: 'Tracy Guns', type: 'character', faction: 'hero', hp: 160, maxHp: 160, speed: 9, attribute: 'extra_carry', attrDesc: 'Hold 5 weapons · Any Gun', icon: '🔥', img: 'img/char/tracy_guns.png' },
+  { id: 'c14', name: 'Ranger Kate', type: 'character', faction: 'hero', hp: 190, maxHp: 190, speed: 6, attribute: 'rifle_specialist', attrDesc: 'Rifle +25% dmg · Assault Rifle only', icon: '🪖', img: 'img/char/ranger_kate.png' },
+  { id: 'c16', name: 'Agent Ace', type: 'character', faction: 'hero', hp: 150, maxHp: 150, speed: 10, attribute: 'dodge_bullets', attrDesc: '50% chance to dodge bullets · Revolver only', icon: '♠️', img: 'img/char/agent_ace.png' },
   // Villains
-  { id: 'c2', name: 'Iron Titan', type: 'character', faction: 'villain', hp: 240, maxHp: 240, speed: 1, attribute: 'heavy_armor', attrDesc: 'Riot Gear +25% eff · Moves Charged phase only', icon: '🦾', img: 'img/char/iron_titan.png' },
+  { id: 'c2', name: 'Iron Titan', type: 'character', faction: 'villain', hp: 240, maxHp: 240, speed: 1, attribute: 'heavy_armor', attrDesc: 'Riot Gear +25% eff · Shotgun only', icon: '🦾', img: 'img/char/iron_titan.png' },
   { id: 'c3', name: 'Lunging Logan', type: 'character', faction: 'villain', hp: 150, maxHp: 150, speed: 10, attribute: 'swift_melee', attrDesc: 'Move and Attack · Melee only', icon: '🔪', img: 'img/char/lunging_logan.png' },
-  { id: 'c5', name: 'Toxic Trooper', type: 'character', faction: 'villain', hp: 210, maxHp: 210, speed: 4, attribute: 'radioactive_resist', attrDesc: '100% radiation immunity · Non-hazard tiles deal dmg', icon: '☢️', img: 'img/char/toxic_trooper.png' },
-  { id: 'c8', name: 'The Shadow', type: 'character', faction: 'villain', hp: 1, maxHp: 1, speed: 0, attribute: 'shadow_clone', attrDesc: 'Mirrors the hero · Turn always last', icon: '🥷', img: 'img/char/the_shadow.jpeg' },
-  { id: 'c9', name: 'Cowboy Clint', type: 'character', faction: 'villain', hp: 160, maxHp: 160, speed: 9, attribute: 'deadeye', attrDesc: 'Fire Revolvers faster · Revolvers & Pistols only', icon: '🤠', img: 'img/char/cowboy_clint.png' },
-  { id: 'c12', name: 'Huntress Hellena', type: 'character', faction: 'villain', hp: 200, maxHp: 200, speed: 5, attribute: 'sniper_specialist', attrDesc: 'Sniper+33% dmg · Move Fast & Medium only', icon: '🎯', img: 'img/char/huntress_hellena.png' },
-  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'Radar: ping enemy direction & range · -1 SPD per card equipped', icon: '🧠', img: 'img/char/tactical_tim.png' },
-  { id: 'c15', name: 'Hank the Tank', type: 'character', faction: 'villain', hp: 220, maxHp: 220, speed: 3, attribute: 'explosive_specialist', attrDesc: 'Explosive +40% dmg · Too slow for Fast phase', icon: '💥', img: 'img/char/hank_the_tank.png' },
+  { id: 'c5', name: 'Toxic Trooper', type: 'character', faction: 'villain', hp: 210, maxHp: 210, speed: 4, attribute: 'radioactive_resist', attrDesc: '100% radiation immunity · SMG only', icon: '☢️', img: 'img/char/toxic_trooper.png' },
+  { id: 'c8', name: 'The Shadow', type: 'character', faction: 'villain', hp: 1, maxHp: 1, speed: 0, attribute: 'shadow_clone', attrDesc: 'Mirrors the hero · Any Gun', icon: '🥷', img: 'img/char/the_shadow.jpeg' },
+  { id: 'c9', name: 'Cowboy Clint', type: 'character', faction: 'villain', hp: 160, maxHp: 160, speed: 9, attribute: 'deadeye', attrDesc: 'Fire Revolvers faster · Revolver only', icon: '🤠', img: 'img/char/cowboy_clint.png' },
+  { id: 'c12', name: 'Huntress Hellena', type: 'character', faction: 'villain', hp: 200, maxHp: 200, speed: 5, attribute: 'sniper_specialist', attrDesc: 'Sniper+33% dmg · Sniper only', icon: '🎯', img: 'img/char/huntress_hellena.png' },
+  { id: 'c13', name: 'Tactical Tim', type: 'character', faction: 'villain', hp: 140, maxHp: 140, speed: 11, attribute: 'tactical_xray', attrDesc: 'Radar: ping enemy direction & range · Pistol only', icon: '🧠', img: 'img/char/tactical_tim.png' },
+  { id: 'c15', name: 'Hank the Tank', type: 'character', faction: 'villain', hp: 220, maxHp: 220, speed: 3, attribute: 'explosive_specialist', attrDesc: 'Explosive +40% dmg · Explosive only', icon: '💥', img: 'img/char/hank_the_tank.png' },
 ];
 
 // ── Location cards (49 for 7×7 grid) ────────────────────────────────────────

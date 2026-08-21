@@ -177,8 +177,8 @@ function openBestiary(charId) {
     const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(charId) : {};
     const glowColor = char.faction === 'hero' ? 'var(--hero)' : 'var(--villain)';
     const subtype = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
+    const isAnyGun = subtype === 'any';
     const subtypeLabel = subtype ? subtype.replace('_', ' ') : 'unassigned';
-    const owns = subtype && typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(subtype) : false;
 
     let rows = '';
     for (const diff of ['easy', 'medium', 'hard', 'impossible']) {
@@ -189,18 +189,42 @@ function openBestiary(charId) {
     </div>`;
     }
 
+    let gearSection;
+    if (isAnyGun) {
+        // Firearms specialist — needs one weapon of EVERY subtype, shown as a checklist.
+        const subtypeRows = ALL_WEAPON_SUBTYPES.map(sub => {
+            const owns = typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(sub) : false;
+            const label = sub.replace('_', ' ');
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
+        <span style="font-size:0.62rem;text-transform:capitalize;">${label}</span>
+        <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
+      </div>`;
+        }).join('');
+        const allOwned = ALL_WEAPON_SUBTYPES.every(sub => _ownsAnyOfSubtype(sub));
+        gearSection = `
+      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning at least one weapon of <b>every</b> subtype (firearms specialist).</div>
+      ${subtypeRows}
+      ${!allOwned ? `<button class="btn primary" style="width:100%;margin:8px 0 10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop (any subtype)</button>` : ''}
+    `;
+    } else {
+        const owns = subtype && typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(subtype) : false;
+        gearSection = `
+      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning a ${subtypeLabel} weapon.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px;background:${owns ? 'rgba(68,255,136,0.06)' : 'rgba(232,184,75,0.06)'};">
+        <span style="font-size:0.7rem;">🔫 Own a ${subtypeLabel} weapon</span>
+        <span style="font-size:0.7rem;color:${owns ? 'var(--green)' : 'var(--accent)'};">${owns ? '✓ OWNED' : 'NOT YET'}</span>
+      </div>
+      ${!owns && subtype ? `<button class="btn primary" style="width:100%;margin-bottom:10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop for ${subtypeLabel}</button>` : ''}
+    `;
+    }
+
     document.getElementById('bestiary-body').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
       <span style="font-size:1.4rem;">${char.icon}</span>
       <h2 style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.1rem;color:${glowColor};margin:0;">${char.name}</h2>
     </div>
     <div style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">${char.faction.toUpperCase()} · LOCKED</div>
-    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning a ${subtypeLabel} weapon.</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px;background:${owns ? 'rgba(68,255,136,0.06)' : 'rgba(232,184,75,0.06)'};">
-      <span style="font-size:0.7rem;">🔫 Own a ${subtypeLabel} weapon</span>
-      <span style="font-size:0.7rem;color:${owns ? 'var(--green)' : 'var(--accent)'};">${owns ? '✓ OWNED' : 'NOT YET'}</span>
-    </div>
-    ${!owns && subtype ? `<button class="btn primary" style="width:100%;margin-bottom:10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop for ${subtypeLabel}</button>` : ''}
+    ${gearSection}
     ${rows}
   `;
     document.getElementById('bestiary-overlay').classList.remove('hidden');
