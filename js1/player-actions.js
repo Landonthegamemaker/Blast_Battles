@@ -165,13 +165,13 @@ function playerMove(locIndex) {
   const isSwiftMelee = G.playerChar.attribute === 'swift_melee';
 
   const isReady = isRunAndGun && [...G.playerHand, ...G.playerInPlay]
-    .some(c => c.type === 'weapon' && isWeaponSpeedReady(c, phase, G.playerChar.attribute) && c.ammo > 0
+    .some(c => c.type === 'weapon' && c.speed === phase && c.ammo > 0
       && getDistance(locIndex, G.botPos) <= c.range);
 
   // Logan triggered: opponent must have been adjacent BEFORE the move (use pre-move playerPos)
   const opponentWasAdjacent = getDistance(G.playerPos, G.botPos) <= 1;
   const hasMeleeThisPhase = [...G.playerHand, ...G.playerInPlay]
-    .some(c => c.type === 'weapon' && c.subtype === 'melee' && isWeaponSpeedReady(c, phase, G.playerChar.attribute) && c.ammo > 0);
+    .some(c => c.type === 'weapon' && c.subtype === 'melee' && c.speed === phase && c.ammo > 0);
   const loganTriggered = isSwiftMelee && opponentWasAdjacent && hasMeleeThisPhase;
   // After the triggered move, check if Logan landed adjacent — if so, keep action open for strike
   const loganCanStrike = loganTriggered && getDistance(locIndex, G.botPos) === 0;

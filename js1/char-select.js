@@ -143,8 +143,6 @@ function showCharSelect() {
     BB_Audio.returnToSelect();
     _selectedCharId = null;
     _currentSort = 'faction';
-    const creditsEl = document.getElementById('charselect-credits');
-    if (creditsEl && typeof getCredits === 'function') creditsEl.textContent = `💰 ${getCredits()}`;
     // Reset sort buttons
     document.querySelectorAll('.sort-btn').forEach(btn => {
         btn.classList.toggle('active-sort', btn.dataset.sort === 'faction');

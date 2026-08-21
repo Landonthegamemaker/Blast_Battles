@@ -80,23 +80,15 @@ function buyItem(itemId) {
   return { ok: true };
 }
 
-// Hard/Impossible are meaningfully harder to win against than Easy/Medium, so the
-// same in-match performance (Battle Score) should be worth more credits there —
-// otherwise there's no incentive to play the harder difficulties at all.
-const DIFFICULTY_CREDIT_MULTIPLIER = { easy: 0.6, medium: 1.0, hard: 1.6, impossible: 2.2 };
-
 /**
- * Awards credits at the end of a match, scaled by the match's Battle Score AND
- * the difficulty played — Hard/Impossible pay out more for the same performance.
+ * Awards credits at the end of a match, scaled by the match's Battle Score.
  * @param {number} battleScore - The same score shown on the end-game modal
  *   (see computeBattleScore() in combat.js). Roughly -1.5 to +1.5.
- * @param {string} [difficulty] - 'easy'|'medium'|'hard'|'impossible' (defaults to 1x if omitted/unknown)
  * @returns {number} credits awarded (may be negative; balance itself is clamped at 0)
  */
-function awardMatchCredits(battleScore, difficulty) {
-  const multiplier = DIFFICULTY_CREDIT_MULTIPLIER[difficulty] ?? 1.0;
-  const amount = Math.round(100 * battleScore * multiplier);
-  addCredits(amount, `battle score ${battleScore.toFixed(3)} × ${multiplier} (${difficulty || 'unknown'})`);
+function awardMatchCredits(battleScore) {
+  const amount = Math.round(100 * battleScore);
+  addCredits(amount, `battle score ${battleScore.toFixed(3)}`);
   return amount;
 }
 

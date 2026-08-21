@@ -1,15 +1,45 @@
 /**
  * utils.js — Blast Battles pure utility functions
- * No dependencies. Safe to import after data.js (or standalone).
+ * Dependencies: PHASES (data.js) for isWeaponSpeedReady — load after data.js.
  *
  * Exports (browser globals):
  *   deepClone(obj)       → deep copy via JSON round-trip
  *   shuffle(arr)         → new array, Fisher-Yates shuffled
  *   pick(arr, n?)        → n random unique items (default 1)
  *   rand(arr)            → single random element
+ *   isWeaponSpeedReady(card, phase, attribute?) → boolean
  */
 
 'use strict';
+
+/**
+ * Whether a weapon's speed makes it playable during the given phase.
+ *
+ * Weapons become "ready" starting at their designated phase and stay ready
+ * for every phase after that (cascading forward through fast→medium→slow→
+ * charged): Fast is playable in all 4 phases, Medium in 3 (medium/slow/
+ * charged), Slow in 2 (slow/charged), Charged in just 1 (charged only).
+ * Faster weapons are simply always-ready; slower/heavier ones need to "charge
+ * up" and are restricted to their own phase or later.
+ *
+ * Deadeye's revolvers additionally get a one-phase-early bonus stacked on
+ * top of this (fires as if their speed were one notch faster).
+ *
+ * This is the single source of truth for this rule — combat.js, render.js,
+ * game-state.js, player-actions.js, and ai-bot.js all call this instead of
+ * each re-implementing the same phase-index comparison.
+ *
+ * @param {{ speed: string, subtype?: string }} card
+ * @param {string} phase - current phase name ('fast'|'medium'|'slow'|'charged')
+ * @param {string} [attribute] - acting character's attribute, for the deadeye bonus
+ * @returns {boolean}
+ */
+function isWeaponSpeedReady(card, phase, attribute) {
+  const currentIdx = PHASES.indexOf(phase);
+  let cardIdx = PHASES.indexOf(card.speed);
+  if (attribute === 'deadeye' && card.subtype === 'revolver' && cardIdx > 0) cardIdx -= 1;
+  return currentIdx >= cardIdx;
+}
 
 /**
  * Deep-clones any JSON-serialisable value.

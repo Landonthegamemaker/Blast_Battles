@@ -183,11 +183,8 @@ function getAllowedWeaponSubtypes(attribute) {
 
 // ── Default starter-owned items ─────────────────────────────────────────────
 // Combat Knife + M9 are always owned (fixed starters), plus the single cheapest
-// item in each of the other equip-slot categories, PLUS — critically — the
-// cheapest weapon satisfying every distinct weapon-restriction set in the game
-// (e.g. Ranger Kate needs an assault_rifle/sniper; Combat Knife+M9 don't cover
-// that, so without this she'd start with zero usable weapons). All computed
-// from price rather than hardcoded, so it stays correct if prices/items change.
+// item in each of the other equip-slot categories (computed from price, not
+// hardcoded, so it stays correct if prices/items change).
 const DEFAULT_OWNED_IDS = (function () {
   const fixed = ['w24', 'w4']; // Combat Knife, M9
   const slotCategories = ['head', 'chest', 'legs', 'feet', 'arm'];
@@ -199,17 +196,7 @@ const DEFAULT_OWNED_IDS = (function () {
   // gives new players something non-lethal to work with in that slot too.
   const handNonWeapon = ALL_EQUIPPABLE.filter(i => i.slot === 'hand' && i.type !== 'weapon');
   const cheapestHandGear = handNonWeapon.reduce((min, i) => (i.price < min.price ? i : min), handNonWeapon[0]).id;
-
-  // Coverage guarantee: every distinct allowed-subtype set that any character
-  // actually has needs at least one cheap weapon satisfying it.
-  const restrictionSets = [...new Set(Object.values(WEAPON_ATTRIBUTE_RESTRICTIONS).map(s => s.join(',')))];
-  const coverageIds = restrictionSets.map(key => {
-    const subtypes = key.split(',');
-    const candidates = WEAPON_POOL.filter(w => subtypes.includes(w.subtype));
-    return candidates.reduce((min, w) => (w.price < min.price ? w : min), candidates[0]).id;
-  });
-
-  return [...new Set([...fixed, ...cheapestPerSlot, cheapestHandGear, ...coverageIds])];
+  return [...fixed, ...cheapestPerSlot, cheapestHandGear];
 })();
 
 // ── Character cards (16: 8 heroes, 8 villains) ──────────────────────────────

@@ -72,34 +72,35 @@ function getMissSplashDamage(finalDmg) {
   return Math.round(finalDmg * AOE_SPLASH_MULTIPLIER);
 }
 
-// Range multiplier bounds: 133% at point-blank (dist 0), down to 33% at max range.
-// Linear step size is exactly 1/maxRange between each tile of distance.
-const RANGE_MULTIPLIER_MAX = 4 / 3; // ~133% at dist 0
-const RANGE_MULTIPLIER_MIN = 1 / 3; // ~33% at dist === card.range
+/**
+ * The fraction of full damage a shot still deals at point-blank (dist 0).
+ * Damage scales linearly from this floor up to 100% at the weapon's max range.
+ */
+const MIN_RANGE_MULTIPLIER = 0.5;
 
 /**
- * Scales base damage by how CLOSE the shooter is to their target, relative to
- * the weapon's max range. Point-blank hits the hardest; damage falls off the
- * further out you fire, bottoming out at RANGE_MULTIPLIER_MIN at max range.
- * Melee always deals full-ish damage at contact (range 0 — no scaling, since
- * melee only ever fires at dist 0 anyway).
- *
- * mult(dist) = 4/3 - dist/maxRange
- *   dist 0            → 133%
- *   dist == maxRange  → 33%
- *   (linear in between — e.g. maxRange 3: dist1=100%, dist2=67%, dist3=33%)
+ * Returns the damage multiplier for a shot at `dist` from a weapon with the
+ * given max `range`. Linear from MIN_RANGE_MULTIPLIER at dist 0 up to 1.0 at
+ * max range — rewards positioning at range without ever hitting literal zero
+ * damage on a point-blank shot.
  *
  * @param {{ subtype: string, range: number }} card
  * @param {number} dist - Chebyshev distance to target
  * @returns {number}
  */
 function getRangeMultiplier(card, dist) {
-  if (card.subtype === 'melee' || card.range === 0) return 1; // no scaling — always point-blank
-  return RANGE_MULTIPLIER_MAX - (dist / card.range);
+  if (card.subtype === 'melee') return 1;
+  if (card.range === 0) return 1; // safety guard — no divide-by-zero
+  return MIN_RANGE_MULTIPLIER + (1 - MIN_RANGE_MULTIPLIER) * (dist / card.range);
 }
 
 /**
- * Applies the range multiplier to base damage, rounding to a whole number.
+ * Scales base damage by how far the shooter is from their maximum range.
+ * Melee always deals full damage at contact (range 0 — no scaling).
+ * All other weapons scale linearly: full damage at max range, down to
+ * MIN_RANGE_MULTIPLIER (never zero) at point-blank range.
+ * This rewards positioning and makes snipers devastating at max range,
+ * without making a point-blank shot deal literally nothing.
  *
  * @param {number} baseDmg
  * @param {{ subtype: string, range: number }} card
@@ -546,7 +547,13 @@ function isCardPlayable(card) {
   const phase = PHASES[G.phase];
 
   if (card.type === 'weapon') {
-    if (!isWeaponSpeedReady(card, phase, G.playerChar.attribute)) return false;
+    const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
+    let allowedPhase = card.speed;
+    if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
+      const idx = PHASE_ORDER.indexOf(card.speed);
+      if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
+    }
+    if (phase !== allowedPhase && phase !== card.speed) return false;
     if (card.ammo <= 0) return false;
     if (G.playerChar.attribute === 'dual_wield'         && card.subtype !== 'pistol'        && card.subtype !== 'revolver')     return false;
     if (G.playerChar.attribute === 'deadeye'            && card.subtype !== 'revolver'      && card.subtype !== 'pistol')       return false;
@@ -756,7 +763,7 @@ function endGame(winner, timeLimit = false) {
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
   const { battleFinal } = computeBattleScore(false);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty) : 0;
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal) : 0;
   const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
 
   const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
@@ -832,7 +839,7 @@ function retreat() {
   G.gameOver = true;
 
   const { battleFinal } = computeBattleScore(true);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty) : 0;
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal) : 0;
 
   const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
   const mins    = Math.floor(elapsed / 60);

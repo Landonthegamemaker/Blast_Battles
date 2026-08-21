@@ -91,7 +91,14 @@ function hpBarColor(pct) {
       if (!isPairedCard && G.playerActedThisPhase) return false;
       const phase = PHASES[G.phase];
       if (card.type === 'weapon') {
-        if (!isWeaponSpeedReady(card, phase, G.playerChar.attribute)) return false;
+        // Deadeye (Carl): revolvers can fire one phase earlier (slow→medium, medium→fast)
+        const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
+        let allowedPhase = card.speed;
+        if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
+          const idx = PHASE_ORDER.indexOf(card.speed);
+          if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
+        }
+        if (phase !== allowedPhase && phase !== card.speed) return false;
         if (card.ammo <= 0) return false;
         // Weapon subtype restrictions
         if (G.playerChar.attribute === 'dual_wield' && card.subtype !== 'pistol' && card.subtype !== 'revolver') return false;
@@ -132,14 +139,13 @@ function hpBarColor(pct) {
         ...G.playerHand.map(c => ({ card: c, inPlay: false }))
       ];
       for (const { card, inPlay } of allCards) {
-        const isEquippedArmor = inPlay && card.type === 'defense';
-        const div = isEquippedArmor ? buildCompactArmorCardEl(card) : buildCardEl(card, true, inPlay);
+        const div = buildCardEl(card, true, inPlay);
         const playable = isCardPlayable(card);
 
         if (G.awaitingScrapChoice) {
           // All cards scrappable — hand and equipped
           div.style.cursor = 'pointer';
-          if (inPlay && !isEquippedArmor) div.classList.add('in-play-badge'); // keep equipped label
+          if (inPlay) div.classList.add('in-play-badge'); // keep equipped label
           const badge = document.createElement('div');
           badge.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:rgba(255,68,68,0.92);color:#fff;font-size:0.5rem;text-align:center;padding:4px 2px;font-family:Share Tech Mono,monospace;font-weight:700;letter-spacing:1px;z-index:4;border-radius:0 0 4px 4px;';
           badge.textContent = 'CLICK TO SCRAP';
@@ -156,8 +162,9 @@ function hpBarColor(pct) {
           div.classList.add('in-play-badge');
           div.classList.add('unplayable');
           div.style.cursor = 'default';
-        } else if (isEquippedArmor) {
-          // Equipped defense — compact display, non-interactive
+        } else if (inPlay) {
+          // Equipped defense — just show badge
+          div.classList.add('in-play-badge');
           div.style.cursor = 'default';
         } else if (playable) {
           div.classList.add('playable');
@@ -238,12 +245,8 @@ function hpBarColor(pct) {
     function renderBotCards() {
       const el = document.getElementById('bot-all-cards'); if (!el) return;
       el.innerHTML = '';
-      // In-play cards shown face-up with EQUIPPED badge (armor gets the compact layout)
+      // In-play cards shown face-up with EQUIPPED badge
       for (const card of G.botInPlay) {
-        if (card.type === 'defense') {
-          el.appendChild(buildCompactArmorCardEl(card));
-          continue;
-        }
         const div = buildCardEl(card, false, true);
         div.classList.add('in-play-badge');
         div.style.cursor = 'default';
@@ -318,22 +321,6 @@ function hpBarColor(pct) {
       </div>
     `;
       }
-      return div;
-    }
-
-    function buildCompactArmorCardEl(card) {
-      const div = document.createElement('div');
-      div.className = 'card defense mini-armor';
-      div.dataset.id = card.id;
-      const pct = Math.max(0, (card.durability / card.maxDurability) * 100);
-      div.innerHTML = `
-      <div class="mini-armor-icon">${card.icon || '🛡️'}</div>
-      <div class="mini-armor-info">
-        <div class="mini-armor-name">${card.name}</div>
-        <div class="mini-armor-stats">DEF ${card.defense} · ${card.durability}/${card.maxDurability}</div>
-        <div class="mini-armor-bar"><div class="mini-armor-bar-fill" style="width:${pct}%"></div></div>
-      </div>
-    `;
       return div;
     }
 

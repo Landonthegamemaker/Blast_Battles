@@ -143,16 +143,6 @@ function buildObsVector() {
     v.push(Math.min(G.turn, MAX_TURNS) / MAX_TURNS);
 
     // Explicit helper features = 3
-    // NOTE: these three features intentionally still use the OLD exact-phase-match
-    // rule (c.speed === phase), NOT the new cascading isWeaponSpeedReady() rule used
-    // everywhere else in this file. This is the trained "Impossible" model's INPUT —
-    // changing its shape/meaning would feed it a distribution it was never trained
-    // on, silently degrading its play rather than improving it. The model would need
-    // retraining against the new rules to fully benefit; until then it slightly
-    // under-recognizes when a Fast/Medium weapon is still ready in a later phase.
-    // The actual ACTION-LEGALITY masking below (which weapons it's allowed to pick)
-    // IS updated to the new rule, so it never behaves illegally — it's just working
-    // from a slightly stale read of "is this a great phase to fire" when judging fit.
     const usable = [...G.playerHand, ...G.playerInPlay].filter(c => c.type === 'weapon' && c.ammo > 0);
     const hasValidShot = usable.some(c => c.speed === phase && (c.subtype === 'melee' ? dist === 0 : dist <= c.range)) ? 1 : 0;
     v.push(hasValidShot);
@@ -199,12 +189,12 @@ function impossibleBotPlayPhase() {
                 ? (c.subtype === 'melee' ? dist === 0 : dist <= c.range)
                 : true;
             const legal = !isPistolLocked && !isRevolverLocked && !isMeleeLocked && !isDefenseLocked &&
-                ((c.type === 'weapon' && isWeaponSpeedReady(c, phase, G.botChar.attribute) && inRange && c.ammo > 0)
+                ((c.type === 'weapon' && c.speed === phase && inRange && c.ammo > 0)
                     || (c.type === 'defense'));
             if (legal && logits[1 + i] > bestScore) { bestScore = logits[1 + i]; bestAction = 1 + i; }
         });
         // Slot 1: in-play weapon
-        const inPlayLegal = G.botInPlay.some(c => c.type === 'weapon' && c.ammo > 0 && isWeaponSpeedReady(c, phase, G.botChar.attribute)
+        const inPlayLegal = G.botInPlay.some(c => c.type === 'weapon' && c.ammo > 0 && c.speed === phase
             && (c.subtype === 'melee' ? dist === 0 : dist <= c.range)
             && !(G.botChar.attribute === 'pistol_specialist' && c.subtype !== 'pistol')
             && !(G.botChar.attribute === 'swift_melee' && c.subtype !== 'melee'));
@@ -217,7 +207,7 @@ function impossibleBotPlayPhase() {
         } else {
             const idx = bestAction - 1;
             let card = G.botHand[idx];
-            if (!card) card = G.botInPlay.find(c => c.type === 'weapon' && c.ammo > 0 && isWeaponSpeedReady(c, phase, G.botChar.attribute)
+            if (!card) card = G.botInPlay.find(c => c.type === 'weapon' && c.ammo > 0 && c.speed === phase
                 && (c.subtype === 'melee' ? dist === 0 : dist <= c.range));
             if (card) {
                 if (card.type === 'weapon') {
@@ -345,11 +335,18 @@ function botPlayPhase() {
     const playerHpRatio = G.playerChar.hp / G.playerChar.maxHp;
     const nearKill = isOffensive && playerHpRatio < 0.30;
 
-    // Playable weapons: speed cascades forward from its phase (see isWeaponSpeedReady
-    // in utils.js), ammo > 0, within max range. Melee requires contact (dist=0).
+    // Playable weapons: speed matches phase, ammo > 0, within max range
+    // Melee requires contact (dist=0); all others usable at dist 0..maxRange
+    const PHASE_ORDER_BOT = ['fast', 'medium', 'slow', 'charged'];
     let validWeapons = allBotWeapons.filter(c => {
         if (c.ammo <= 0) return false;
-        if (!isWeaponSpeedReady(c, phase, attr)) return false;
+        // Deadeye: revolvers can fire one phase early
+        let allowed = c.speed === phase;
+        if ((attr === 'deadeye') && c.subtype === 'revolver') {
+            const idx = PHASE_ORDER_BOT.indexOf(c.speed);
+            if (idx > 0 && PHASE_ORDER_BOT[idx - 1] === phase) allowed = true;
+        }
+        if (!allowed) return false;
         if (c.subtype === 'melee') return dist === 0;
         return dist <= c.range;
     });
@@ -380,7 +377,7 @@ function botPlayPhase() {
     // ── Priority 2: offensive pressure — near-kill shot trumps low-HP heal ─────
     if (nearKill && canFire) {
         const scored = validWeapons.map(w => {
-            const rangeMult = getRangeMultiplier(w, dist); // closer = higher mult now (see combat.js)
+            const rangeMult = w.subtype === 'melee' ? 1 : (w.range > 0 ? dist / w.range : 1);
             return { w, ev: Math.round(w.damage * rangeMult) };
         });
         const weapon = scored.reduce((a, b) => a.ev >= b.ev ? a : b).w;
@@ -423,7 +420,7 @@ function botPlayPhase() {
     if (canFire) {
         // Pick weapon with highest expected damage after range multiplier
         const scored = validWeapons.map(w => {
-            const rangeMult = getRangeMultiplier(w, dist); // closer = higher mult now (see combat.js)
+            const rangeMult = w.subtype === 'melee' ? 1 : (w.range > 0 ? dist / w.range : 1);
             return { w, ev: Math.round(w.damage * rangeMult) };
         });
         const weapon = (G.difficulty === 'hard' || isOffensive)
@@ -519,11 +516,19 @@ function botMoveSmart() {
     const currentLoc = G.locations[G.botPos];
     const onHazard = currentLoc.effect === 'radiation';
 
-    // Target range: under the new range-damage curve (133% at point-blank down to
-    // 33% at max range), closing distance is always the higher-damage play — every
-    // archetype wants contact now, not just melee. (Previously this chased max
-    // weapon range, back when farther away used to deal more damage.)
-    const targetRange = 0;
+    // Playable weapons this phase
+    const playableThisPhase = allBotWeapons.filter(w => w.speed === phase && w.ammo > 0);
+
+    // Target range: swift_melee always wants contact (0); others prefer max weapon range.
+    let targetRange = 0;
+    if (G.botChar.attribute !== 'swift_melee') {
+        targetRange = 1;
+        if (playableThisPhase.length > 0) {
+            targetRange = Math.max(...playableThisPhase.map(w => w.range));
+        } else if (allBotWeapons.length > 0) {
+            targetRange = Math.max(...allBotWeapons.map(w => w.range));
+        }
+    }
 
     // ── Character archetype for movement decisions ──────────────────────────
     const botAttr = G.botChar.attribute;
@@ -565,10 +570,9 @@ function botMoveSmart() {
         // This overrides normal positioning logic; Huntress wants elevation above all else.
         if (botAttr === 'sniper_specialist') {
             if (loc.effect === 'sniper_nest') score += 600;
-            // Range damage now favors point-blank (133%) over max range (33%) — score
-            // toward contact, same as everyone else. The Sniper Nest bonus above is a
-            // separate location buff, not a reason to hang back at range anymore.
-            score += 200 - dist * 80;
+            // Also score good range for snipers (range 3)
+            const rangeDelta = Math.abs(dist - 3);
+            score += 200 - rangeDelta * 80;
             if (isHazardTile(node)) score -= 500;
             if (isCritical) {
                 if (loc.effect === 'heal') score += 800;

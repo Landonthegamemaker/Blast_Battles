@@ -26,14 +26,9 @@ function openShop() {
 function closeShop() {
   document.getElementById('shop-overlay').classList.add('hidden');
   const equipOverlay = document.getElementById('equip-overlay');
-  const charSelectOverlay = document.getElementById('char-select-overlay');
   if (equipOverlay && !equipOverlay.classList.contains('hidden')) {
     document.getElementById('equip-credits').textContent = `💰 ${getCredits()}`;
     if (typeof _activeEquipSlot !== 'undefined' && _activeEquipSlot) openSlotPicker(_activeEquipSlot);
-  }
-  if (charSelectOverlay && charSelectOverlay.style.display !== 'none') {
-    const el = document.getElementById('charselect-credits');
-    if (el) el.textContent = `💰 ${getCredits()}`;
   }
 }
 

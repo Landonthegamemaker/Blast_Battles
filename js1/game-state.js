@@ -554,8 +554,14 @@ function playerPlayCard(card) {
 
   // ── Weapon ─────────────────────────────────────────────────────────────────
   if (card.type === 'weapon') {
-    if (!isWeaponSpeedReady(card, phase, G.playerChar.attribute)) {
-      logMsg('system', `${card.name} (${card.speed}) isn't ready yet — it becomes playable from the ${card.speed} phase onward.`); return;
+    const PHASE_ORDER = ['fast', 'medium', 'slow', 'charged'];
+    let allowedPhase = card.speed;
+    if (G.playerChar.attribute === 'deadeye' && card.subtype === 'revolver') {
+      const idx = PHASE_ORDER.indexOf(card.speed);
+      if (idx > 0) allowedPhase = PHASE_ORDER[idx - 1];
+    }
+    if (phase !== allowedPhase && phase !== card.speed) {
+      logMsg('system', `${card.name} is a ${card.speed} weapon — can only play in the ${card.speed} phase (or ${allowedPhase} with Deadeye).`); return;
     }
     // Subtype restrictions
     if (G.playerChar.attribute === 'dual_wield' && card.subtype !== 'pistol' && card.subtype !== 'revolver') { logMsg('system', `${G.playerChar.name} can only fire pistols or revolvers — ${card.name} is locked.`); return; }
