@@ -168,7 +168,7 @@ const GEAR_POOL = GEAR_POOL_BASE.map(g => ({ ...g, price: g.defense * g.durabili
 // Everyone else starts locked — win against a character on EVERY difficulty
 // (easy/medium/hard/impossible) to unlock them. See progression.js for the
 // win-tracking functions and char-select.js for the Bestiary/Challenge UI.
-const STARTER_UNLOCKED_IDS = ['c1', 'c3']; // Pistol Pete, Lunging Logan
+const STARTER_UNLOCKED_IDS = ['c1', 'c9']; // Pistol Pete, Cowboy Clint — matching gunslinger kits
 
 // Every equippable item across all three pools, for the Shop and Equip screens.
 const ALL_EQUIPPABLE = [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL];
