@@ -15,7 +15,9 @@
  *   addCredits(amount, reason?)      → new balance (also logs to console)
  *   getOwnedQuantity(itemId)         → number (0 if never owned)
  *   isOwned(itemId)                  → boolean (getOwnedQuantity(itemId) > 0)
- *   buyItem(itemId)                  → { ok: boolean, reason?: string }
+ *   hasAnyOwnedItems()                → boolean (true once anything at all has been bought)
+ *   buyItem(itemId)                  → { ok: boolean, reason?: string } — locked to M9-only
+ *                                       until hasAnyOwnedItems() is true (see below)
  *   sellItem(itemId)                 → { ok: boolean, reason?: string, refund?: number }
  *   awardMatchCredits(battleScore, difficulty?) → number credits awarded (can be negative)
  *   resetProgression()               → wipes credits/ownership back to defaults (debug/testing)
@@ -96,6 +98,12 @@ function getOwnedQuantity(itemId) {
   return map[itemId] || 0;
 }
 
+/** True if the player owns at least one item of any kind (any quantity > 0). */
+function hasAnyOwnedItems() {
+  const map = _loadOwned();
+  return Object.values(map).some(qty => qty > 0);
+}
+
 function isOwned(itemId) {
   return getOwnedQuantity(itemId) > 0;
 }
@@ -103,12 +111,21 @@ function isOwned(itemId) {
 /**
  * Buys one additional copy of an item. Owning multiple copies is what allows
  * equipping the same weapon into both hand slots (or both arm slots).
+ *
+ * A brand-new account (owns literally nothing) can only buy the M9 — this is
+ * the intended onboarding path (2 M9s = exactly $100, a full dual-wield
+ * loadout for Pistol Pete or Cowboy Clint) — until that first purchase is
+ * made, everything else is locked, so a new player can't accidentally spend
+ * their starting $100 on something neither starter character can even use.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string }}
  */
 function buyItem(itemId) {
   const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'Unknown item.' };
+  if (itemId !== 'w4' && !hasAnyOwnedItems()) {
+    return { ok: false, reason: 'Buy an M9 first — everything else unlocks after your first purchase.' };
+  }
   const bal = getCredits();
   if (bal < item.price) return { ok: false, reason: 'Not enough credits.' };
   addCredits(-item.price, `bought ${item.name}`);
@@ -221,4 +238,5 @@ function resetProgression() {
   _saveOwned(_defaultOwnedMap());
   localStorage.removeItem(DEFEATS_KEY);
   localStorage.removeItem('bb-loadouts');
+  localStorage.removeItem('bb-tutorial-seen'); // replays the welcome tutorial next time char-select shows
 }

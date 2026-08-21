@@ -15,12 +15,32 @@
  * - openBestiary(charId) / closeBestiary() - locked character detail + per-difficulty progress
  * - startChallenge(charId, difficulty) - deliberately target a specific locked character +
  *   difficulty instead of waiting on random matchmaking; skips the manual Difficulty screen
+ * - showTutorial() / closeTutorial() / maybeShowTutorial() - first-time welcome tutorial,
+ *   auto-shown once on a brand-new account (see TUTORIAL_SEEN_KEY), re-triggerable from Help
  * Internal state:
  * - _selectedCharId: currently selected character ID (null if none)
  * - _currentSort: current sorting key for character grids ('faction', 'name', 'hp', 'speed', 'ability')
  * - _challengeTargetCharId / _challengeDifficulty: pending Bestiary Challenge, consumed by initGame()
 */
 'use strict';
+
+// ── First-time tutorial ──────────────────────────────────────────────────
+const TUTORIAL_SEEN_KEY = 'bb-tutorial-seen';
+
+/** Shows the welcome tutorial unconditionally — used by the "show again" link in Help. */
+function showTutorial() {
+    document.getElementById('tutorial-overlay').classList.remove('hidden');
+}
+
+function closeTutorial() {
+    localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+    document.getElementById('tutorial-overlay').classList.add('hidden');
+}
+
+/** Shows the tutorial once, automatically, the first time a new player ever loads the game. */
+function maybeShowTutorial() {
+    if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) showTutorial();
+}
 
 function detectOrientation() {
     const saved = localStorage.getItem('bb-orientation');
@@ -245,6 +265,7 @@ function showCharSelect() {
     btn.style.opacity = '0';
     btn.style.pointerEvents = 'none';
     document.getElementById('char-select-preview').innerHTML = '← Select a character to continue';
+    maybeShowTutorial();
 }
 
 function selectChar(charId) {

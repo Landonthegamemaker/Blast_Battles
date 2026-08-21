@@ -1,13 +1,18 @@
 /**
  * shop.js — Shop screen: spend credits earned from matches (via Battle Score) to unlock
- * new gear/weapons.
- * Dependencies (must load first): data.js (ALL_EQUIPPABLE), progression.js (getCredits/isOwned/buyItem)
+ * new gear/weapons, or sell owned copies back for 50% of their price.
+ * Dependencies (must load first): data.js (ALL_EQUIPPABLE),
+ *   progression.js (getCredits/getOwnedQuantity/buyItem/sellItem)
  * Layers on top of whichever screen opened it (usually the Equip screen) — closing it
  * just hides the shop overlay and refreshes the screen underneath.
  *
+ * Ownership is quantity-based — BUY is always available (even once owned), since
+ * owning multiple copies of the same item is what lets a character dual-wield two
+ * of the same weapon. SELL appears once you own at least one.
+ *
  * Exports (browser globals):
  *   openShop()   — show the shop, filtered to "All" items
- *   closeShop()  — hide the shop, refresh the equip screen behind it if visible
+ *   closeShop()  — hide the shop, refresh the equip/char-select screen behind it
  */
 'use strict';
 
@@ -60,6 +65,31 @@ function _shopItemStat(item) {
   return `${item.defense} DEF · ${item.durability}×`;
 }
 
+/**
+ * Wipes credits/ownership/loadouts/unlock progress back to defaults, after a
+ * confirmation prompt — wired to the "RESET ALL PROGRESS" testing button.
+ */
+function confirmResetProgression() {
+  if (typeof resetProgression !== 'function') return;
+  const ok = confirm('Reset ALL progress? This wipes credits, owned items, character loadouts, and unlock progress back to defaults. This cannot be undone.');
+  if (!ok) return;
+  resetProgression();
+  _setShopMsg('✓ Progress reset.');
+  _renderShopGrid();
+  // Refresh whichever screen is behind the shop so it reflects the reset immediately.
+  const equipOverlay = document.getElementById('equip-overlay');
+  const charSelectOverlay = document.getElementById('char-select-overlay');
+  if (equipOverlay && !equipOverlay.classList.contains('hidden') && typeof showEquipScreen === 'function') {
+    showEquipScreen();
+  } else if (charSelectOverlay && charSelectOverlay.style.display !== 'none' && typeof renderCharGrids === 'function') {
+    renderCharGrids(_currentSort);
+    const el = document.getElementById('charselect-credits');
+    if (el) el.textContent = `💰 ${getCredits()}`;
+  }
+  // The welcome tutorial's "seen" flag was just cleared by resetProgression() —
+  // show it right away instead of waiting for the next char-select visit.
+  if (typeof maybeShowTutorial === 'function') maybeShowTutorial();
+}
 function _renderShopGrid() {
   document.getElementById('shop-credits').textContent = `💰 ${getCredits()}`;
   const grid = document.getElementById('shop-grid');
@@ -69,38 +99,50 @@ function _renderShopGrid() {
     .sort((a, b) => a.price - b.price);
 
   for (const item of items) {
-    const owned = isOwned(item.id);
+    const qty = getOwnedQuantity(item.id);
+    const owned = qty > 0;
+    const sellValue = Math.floor(item.price * 0.5);
+    const locked = item.id !== 'w4' && !hasAnyOwnedItems();
     const card = document.createElement('div');
-    card.className = 'shop-card' + (owned ? ' owned' : '');
+    card.className = 'shop-card' + (owned ? ' owned' : '') + (locked ? ' locked-item' : '');
     card.innerHTML = `
       <div class="sc-icon">${item.icon}</div>
-      <div class="sc-name">${item.name}</div>
-      <div class="sc-stat">${_shopItemStat(item)}</div>
-      <div class="sc-stat" style="color:var(--accent);">${owned ? 'OWNED' : `💰 ${item.price}`}</div>
+      <div class="sc-name">${item.name}${owned ? ` <span style="color:var(--muted);">×${qty}</span>` : ''}</div>
+      <div class="sc-stat">${locked ? '🔒 Buy an M9 first' : _shopItemStat(item)}</div>
+      <div class="sc-stat" style="color:var(--accent);">💰 ${item.price}${owned ? ` · sell 💰${sellValue}` : ''}</div>
     `;
-    const btn = document.createElement('button');
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:3px;width:100%;';
+
+    // BUY — always available (owning multiple copies is how dual-wielding the
+    // same weapon works), just disabled when unaffordable OR still M9-gated.
+    const buyBtn = document.createElement('button');
+    buyBtn.className = 'btn primary';
+    buyBtn.textContent = owned ? '+ BUY' : 'BUY';
+    const canAfford = getCredits() >= item.price;
+    buyBtn.disabled = !canAfford || locked;
+    if (!canAfford || locked) buyBtn.style.opacity = '0.5';
+    buyBtn.onclick = () => {
+      const res = buyItem(item.id);
+      if (res.ok) { _setShopMsg(`✓ Bought ${item.name}.`); _renderShopGrid(); }
+      else { _setShopMsg(`✗ ${res.reason}`); }
+    };
+    btnRow.appendChild(buyBtn);
+
+    // SELL — only shown once you own at least one.
     if (owned) {
-      btn.className = 'btn';
-      btn.textContent = '✓ OWNED';
-      btn.disabled = true;
-      btn.style.opacity = '0.6';
-    } else {
-      btn.className = 'btn primary';
-      btn.textContent = 'BUY';
-      const canAfford = getCredits() >= item.price;
-      btn.disabled = !canAfford;
-      if (!canAfford) btn.style.opacity = '0.5';
-      btn.onclick = () => {
-        const res = buyItem(item.id);
-        if (res.ok) {
-          _setShopMsg(`✓ Bought ${item.name}.`);
-          _renderShopGrid();
-        } else {
-          _setShopMsg(`✗ ${res.reason}`);
-        }
+      const sellBtn = document.createElement('button');
+      sellBtn.className = 'btn';
+      sellBtn.textContent = `SELL`;
+      sellBtn.onclick = () => {
+        const res = sellItem(item.id);
+        if (res.ok) { _setShopMsg(`✓ Sold ${item.name} for 💰${res.refund}.`); _renderShopGrid(); }
+        else { _setShopMsg(`✗ ${res.reason}`); }
       };
+      btnRow.appendChild(sellBtn);
     }
-    card.appendChild(btn);
+
+    card.appendChild(btnRow);
     grid.appendChild(card);
   }
 }

@@ -1446,10 +1446,6 @@
       background: rgba(68, 255, 136, 0.06);
     }
 
-    .shop-card.locked-item {
-      opacity: 0.5;
-    }
-
     .shop-card .sc-icon {
       font-size: 1.4rem;
     }
@@ -2387,10 +2383,10 @@
         style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;max-height:50vh;overflow-y:auto;padding:2px;">
       </div>
       <button class="btn primary" style="width:100%;margin-top:14px;" onclick="closeShop()">CLOSE</button>
-      <button class="btn" style="width:100%;margin-top:6px;font-size:0.6rem;color:var(--accent2);border-color:rgba(255,68,68,0.4);" onclick="confirmResetProgression()">🔄 RESET ALL PROGRESS (testing)</button>
     </div>
   </div>
 
+  <!-- Help Modal -->
   <!-- Bestiary — locked character detail + challenge-a-specific-difficulty picker -->
   <div class="modal-overlay hidden" id="bestiary-overlay">
     <div class="modal" style="max-width:420px;text-align:center;">
@@ -2399,31 +2395,10 @@
     </div>
   </div>
 
-  <!-- Help Modal -->
-  <!-- First-time welcome tutorial — auto-shown once, re-triggerable from Help -->
-  <div class="modal-overlay hidden" id="tutorial-overlay">
-    <div class="modal" style="max-width:460px;text-align:left;">
-      <h2
-        style="text-align:center;font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.2rem;color:var(--accent);letter-spacing:2px;margin-bottom:12px;">
-        WELCOME TO BLAST BATTLES</h2>
-      <div style="font-size:0.75rem;line-height:1.9;color:var(--muted);">
-        <b style="color:var(--accent)">1. You start with 💰100 and zero gear.</b> Everything has to be bought first — nothing is pre-equipped.<br>
-        <b style="color:var(--accent)">2. Open the 🛒 SHOP and buy an M9 Pistol (💰50).</b> Buy two and you can dual-wield as Pistol Pete — exactly 💰100.<br>
-        <b style="color:var(--accent)">3. Head to EQUIP</b> and drop your weapon(s) into the hand slots on the paperdoll.<br>
-        <b style="color:var(--accent)">4. Pick a difficulty and fight.</b> Winning earns credits — more on harder difficulties — and can unlock new characters to play as.<br>
-        <b style="color:var(--accent)">5. Come back to the Shop</b> anytime to buy more weapons, armor, and gear with what you've earned.
-      </div>
-      <button class="btn primary" style="width:100%;margin-top:16px;" onclick="closeTutorial()">LET'S GO</button>
-    </div>
-  </div>
-
   <div class="modal-overlay hidden" id="help-overlay">
     <div class="modal" style="max-width:520px;text-align:left;">
       <h2 style="font-size:1.2rem;margin-bottom:12px;">HOW TO PLAY</h2>
       <div style="font-size:0.75rem;line-height:1.8;color:var(--muted);max-height:60vh;overflow-y:auto;">
-        <b style="color:var(--accent)">GETTING STARTED:</b> New accounts start with 💰100 and no gear — visit the 🛒
-        SHOP to buy weapons/armor before EQUIP will let you into a match. See the welcome tutorial (link below) for the
-        quick version.<br>
         <b style="color:var(--accent)">PHASES:</b> Each turn has 4 combat phases: Fast → Medium → Slow → Charged. Each
         phase, you get 1 action. You can move, use/equip a card (if the card speed matches), or skip<br>
         <b style="color:var(--accent)">MOVEMENT:</b> Click any surrounding green highlighted tile to move to a new zone.
@@ -2444,10 +2419,9 @@
         <b style="color:var(--accent)">VICTORY:</b> Reduce the opponent's HP to 0, or survive 20 turns with a larger
         fraction of HP remaining to win the battle. Do you have what it takes to beat the bots?
       </div>
-      <button class="btn" style="width:100%;margin-top:10px;font-size:0.65rem;" onclick="showTutorial()">▶ Show welcome tutorial again</button>
       <button class="btn primary"
         onclick="document.getElementById(&#39;help-overlay&#39;).classList.add(&#39;hidden&#39;)"
-        style="width:100%;margin-top:6px;">GOT IT</button>
+        style="width:100%;margin-top:16px;">GOT IT</button>
     </div>
   </div>
 
