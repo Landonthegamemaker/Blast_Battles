@@ -41,7 +41,9 @@ const CREDITS_KEY = 'bb-credits';
 const OWNED_KEY = 'bb-owned';
 const STARTING_CREDITS = 100;
 
-const DIFFICULTY_CREDIT_MULTIPLIER = { easy: 0.6, medium: 1.0, hard: 1.6, impossible: 2.2 };
+// rewards = battleScore × $100 × multiplier — Hard/Impossible pay more for the
+// same performance since they're meaningfully harder to win against.
+const DIFFICULTY_CREDIT_MULTIPLIER = { easy: 0.5, medium: 1.0, hard: 2.0, impossible: 4.0 };
 
 function _defaultOwnedMap() {
   const map = {};

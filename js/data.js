@@ -11,7 +11,9 @@
  *   getAllowedWeaponSubtypes(attribute) → string[] | null   (null = no restriction)
  *
  * ── Pricing ──────────────────────────────────────────────────────────────
- *   Weapon price  = damage × ammo + (200 × range)
+ *   Weapon price  = (damage + ammo) × (range + REV_SPEED_FACTOR[speed])
+ *                   REV_SPEED_FACTOR: charged=4, slow=3, medium=2, fast=1 —
+ *                   heavier/slower-to-fire weapons cost more, same direction range pushes in.
  *   Defense price = defense × durability          (armor pieces)
  *   Heal price    = healAmount × 3                (medkits/syringes/bandages — defense is 0,
  *                                                   so the armor formula doesn't apply; this is
@@ -51,7 +53,7 @@ const WEAPON_POOL_BASE = [
   { id: 'w1', name: 'Desert Eagle', type: 'weapon', subtype: 'pistol', damage: 42, ammo: 7, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w2', name: 'Glock 18', type: 'weapon', subtype: 'pistol', damage: 18, ammo: 18, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w3', name: 'Magnum .357', type: 'weapon', subtype: 'revolver', damage: 35, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 15, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 5, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w5', name: 'Magnum .44', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 4, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   // Shotguns (range 1)
   { id: 'w6', name: 'SPAS-12', type: 'weapon', subtype: 'shotgun', damage: 64, ammo: 5, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
@@ -64,7 +66,7 @@ const WEAPON_POOL_BASE = [
   { id: 'w12', name: 'Honey Badger', type: 'weapon', subtype: 'assault_rifle', damage: 32, ammo: 12, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
   // Sniper Rifles (range 3)
   { id: 'w13', name: 'Barrett M82', type: 'weapon', subtype: 'sniper', damage: 82, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
-  { id: 'w14', name: 'Dragunov SVD', type: 'weapon', subtype: 'sniper', damage: 67, ammo: 5, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w14', name: 'Dragunov SVD', type: 'weapon', subtype: 'sniper', damage: 65, ammo: 5, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
   { id: 'w15', name: 'AWP', type: 'weapon', subtype: 'sniper', damage: 92, ammo: 3, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
   { id: 'w16', name: 'Intervention', type: 'weapon', subtype: 'sniper', damage: 76, ammo: 4, speed: 'charged', range: 3, icon: '🎯', slot: 'hand' },
   // Grenades / Explosives (range 1)
@@ -85,7 +87,11 @@ const WEAPON_POOL_BASE = [
   { id: 'w29', name: 'Plasma Blade', type: 'weapon', subtype: 'melee', damage: 50, ammo: 5, speed: 'medium', range: 0, icon: '⚡', slot: 'hand' },
   { id: 'w30', name: 'Uzi', type: 'weapon', subtype: 'pistol', damage: 23, ammo: 21, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
 ];
-const WEAPON_POOL = WEAPON_POOL_BASE.map(w => ({ ...w, price: w.damage * w.ammo + 200 * w.range }));
+// Weapon price = (damage + ammo) × (range + REV_SPEED_FACTOR[speed]).
+// REV_SPEED_FACTOR runs Charged(4) > Slow(3) > Medium(2) > Fast(1) — heavier,
+// slower-to-fire weapons cost more, same direction range already pushes in.
+const REV_SPEED_FACTOR = { charged: 4, slow: 3, medium: 2, fast: 1 };
+const WEAPON_POOL = WEAPON_POOL_BASE.map(w => ({ ...w, price: (w.damage + w.ammo) * (w.range + REV_SPEED_FACTOR[w.speed]) }));
 
 // ── Defense cards (30) ──────────────────────────────────────────────────────
 // Armor effectiveness:
@@ -188,35 +194,18 @@ function getAllowedWeaponSubtypes(attribute) {
 }
 
 // ── Default starter-owned items ─────────────────────────────────────────────
-// Combat Knife + M9 are always owned (fixed starters), plus the single cheapest
-// item in each of the other equip-slot categories, PLUS — critically — the
-// cheapest weapon satisfying every distinct weapon-restriction set in the game
-// (e.g. Ranger Kate needs an assault_rifle/sniper; Combat Knife+M9 don't cover
-// that, so without this she'd start with zero usable weapons). All computed
-// from price rather than hardcoded, so it stays correct if prices/items change.
-const DEFAULT_OWNED_IDS = (function () {
-  const fixed = ['w24', 'w4']; // Combat Knife, M9
-  const slotCategories = ['head', 'chest', 'legs', 'feet', 'arm'];
-  const cheapestPerSlot = slotCategories.map(slot => {
-    const items = ALL_EQUIPPABLE.filter(i => i.slot === slot);
-    return items.reduce((min, i) => (i.price < min.price ? i : min), items[0]).id;
-  });
-  // Cheapest hand-slot item that ISN'T a weapon (a shield or healing item) —
-  // gives new players something non-lethal to work with in that slot too.
-  const handNonWeapon = ALL_EQUIPPABLE.filter(i => i.slot === 'hand' && i.type !== 'weapon');
-  const cheapestHandGear = handNonWeapon.reduce((min, i) => (i.price < min.price ? i : min), handNonWeapon[0]).id;
-
-  // Coverage guarantee: every distinct allowed-subtype set that any character
-  // actually has needs at least one cheap weapon satisfying it.
-  const restrictionSets = [...new Set(Object.values(WEAPON_ATTRIBUTE_RESTRICTIONS).map(s => s.join(',')))];
-  const coverageIds = restrictionSets.map(key => {
-    const subtypes = key.split(',');
-    const candidates = WEAPON_POOL.filter(w => subtypes.includes(w.subtype));
-    return candidates.reduce((min, w) => (w.price < min.price ? w : min), candidates[0]).id;
-  });
-
-  return [...new Set([...fixed, ...cheapestPerSlot, cheapestHandGear, ...coverageIds])];
-})();
+// Nothing is pre-unlocked — new players start with $100 credits and zero owned
+// gear, and must buy their first loadout from the Shop before they can equip
+// anything. This is deliberate: at $50 each, two M9s (a full dual-wield loadout
+// for Pistol Pete) costs exactly $100 — both starter characters (Pete, Cowboy
+// Clint) are pistol/revolver-restricted, so this covers either one of them.
+//
+// Caveat: NOT every restricted character is covered by a fresh $100 budget —
+// Ranger Kate's cheapest legal weapon (assault_rifle/sniper only) currently
+// costs more than $100, so she stays unaffordable immediately after unlocking
+// until some savings build up. That's a known gap, not an oversight — flag if
+// it should be addressed by repricing/adding a cheaper rifle-class weapon.
+const DEFAULT_OWNED_IDS = [];
 
 // ── Character unlocks ────────────────────────────────────────────────────
 // Everyone else starts locked — unlocked permanently the first time you defeat
