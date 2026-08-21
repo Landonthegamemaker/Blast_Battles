@@ -200,7 +200,7 @@ function hpBarColor(pct) {
           let displayPct = '';
           if (card.subtype !== 'melee') {
             // Compute full expected damage: range multiplier × location buff
-            const rangeMult = card.range > 0 ? dist / card.range : 1;
+            const rangeMult = getRangeMultiplier(card, dist);
             const baseAfterRange = Math.round(card.damage * rangeMult);
             const afterLocation = applyLocationDamageBuff(baseAfterRange, G.playerChar, G.playerPos, card);
             const totalPct = Math.round(afterLocation / card.damage * 100);

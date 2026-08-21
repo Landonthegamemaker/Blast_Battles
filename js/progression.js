@@ -112,19 +112,20 @@ function isOwned(itemId) {
  * Buys one additional copy of an item. Owning multiple copies is what allows
  * equipping the same weapon into both hand slots (or both arm slots).
  *
- * A brand-new account (owns literally nothing) can only buy the M9 — this is
- * the intended onboarding path (2 M9s = exactly $100, a full dual-wield
- * loadout for Pistol Pete or Cowboy Clint) — until that first purchase is
- * made, everything else is locked, so a new player can't accidentally spend
- * their starting $100 on something neither starter character can even use.
+ * A brand-new account (owns literally nothing) can buy any WEAPON freely, but
+ * armor/gear is locked until at least one weapon is owned — this is the
+ * intended onboarding path (arm yourself first), without pinning new players
+ * to one specific gun. At $50 each, two M9s = exactly $100, a full dual-wield
+ * loadout for Pistol Pete or Cowboy Clint, but any other weapon they can
+ * afford works just as well to satisfy this gate.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string }}
  */
 function buyItem(itemId) {
   const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'Unknown item.' };
-  if (itemId !== 'w4' && !hasAnyOwnedItems()) {
-    return { ok: false, reason: 'Buy an M9 first — everything else unlocks after your first purchase.' };
+  if (item.type !== 'weapon' && !hasAnyOwnedItems()) {
+    return { ok: false, reason: 'Buy a weapon first — armor and gear unlock after your first purchase.' };
   }
   const bal = getCredits();
   if (bal < item.price) return { ok: false, reason: 'Not enough credits.' };
@@ -137,6 +138,15 @@ function buyItem(itemId) {
 
 /**
  * Sells one owned copy of an item back for 50% of its price (rounded down).
+ *
+ * Safeguard: selling a weapon that would leave the player owning ZERO weapons
+ * total is blocked UNLESS their credits after the sale can afford a weapon the
+ * CURRENTLY SELECTED character can actually equip (if one is selected — falls
+ * back to the cheapest weapon anywhere in the game otherwise). This matters:
+ * checking only "any weapon in the whole game" isn't a real safety net for a
+ * restricted character — e.g. the cheapest weapon overall is a melee weapon,
+ * but Pete (pistols/revolvers only) can't equip it, so a balance that only
+ * covers that melee weapon would still strand him with zero usable weapons.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string, refund?: number }}
  */
@@ -146,7 +156,34 @@ function sellItem(itemId) {
   const map = _loadOwned();
   const qty = map[itemId] || 0;
   if (qty <= 0) return { ok: false, reason: "You don't own this." };
+
   const refund = Math.floor(item.price * 0.5);
+
+  if (item.type === 'weapon') {
+    const totalWeaponsOwned = WEAPON_POOL.reduce((sum, w) => sum + (map[w.id] || 0), 0);
+    const sellingLastWeapon = totalWeaponsOwned <= 1; // this is the only weapon unit left, of any kind
+    if (sellingLastWeapon) {
+      const creditsAfterSale = getCredits() + refund;
+      const selectedChar = (typeof _selectedCharId !== 'undefined' && _selectedCharId && typeof CHARACTER_POOL !== 'undefined')
+        ? CHARACTER_POOL.find(c => c.id === _selectedCharId)
+        : null;
+      const allowedSubtypes = selectedChar ? getAllowedWeaponSubtypes(selectedChar.attribute) : null;
+      const candidatePool = allowedSubtypes ? WEAPON_POOL.filter(w => allowedSubtypes.includes(w.subtype)) : WEAPON_POOL;
+      const cheapestReplacement = candidatePool.length
+        ? candidatePool.reduce((min, w) => (w.price < min.price ? w : min), candidatePool[0])
+        : null;
+      if (!cheapestReplacement || creditsAfterSale < cheapestReplacement.price) {
+        const who = selectedChar ? ` ${selectedChar.name} can use` : '';
+        return {
+          ok: false,
+          reason: cheapestReplacement
+            ? `Selling your last weapon would leave you unable to afford a replacement${who} (cheapest is ${cheapestReplacement.name} at $${cheapestReplacement.price}). Buy something else first.`
+            : `Selling your last weapon would leave you with nothing${who} can equip. Buy something else first.`
+        };
+      }
+    }
+  }
+
   map[itemId] = qty - 1;
   if (map[itemId] <= 0) delete map[itemId];
   _saveOwned(map);

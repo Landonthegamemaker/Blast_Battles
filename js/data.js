@@ -53,7 +53,7 @@ const WEAPON_POOL_BASE = [
   { id: 'w1', name: 'Desert Eagle', type: 'weapon', subtype: 'pistol', damage: 42, ammo: 7, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w2', name: 'Glock 18', type: 'weapon', subtype: 'pistol', damage: 18, ammo: 18, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w3', name: 'Magnum .357', type: 'weapon', subtype: 'revolver', damage: 35, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 5, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w4', name: 'M9', type: 'weapon', subtype: 'pistol', damage: 20, ammo: 5, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w5', name: 'Magnum .44', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 4, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   // Shotguns (range 1)
   { id: 'w6', name: 'SPAS-12', type: 'weapon', subtype: 'shotgun', damage: 64, ammo: 5, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
@@ -86,6 +86,47 @@ const WEAPON_POOL_BASE = [
   { id: 'w28', name: 'Shock Baton', type: 'weapon', subtype: 'melee', damage: 25, ammo: 10, speed: 'fast', range: 0, icon: '⚡', slot: 'hand' },
   { id: 'w29', name: 'Plasma Blade', type: 'weapon', subtype: 'melee', damage: 50, ammo: 5, speed: 'medium', range: 0, icon: '⚡', slot: 'hand' },
   { id: 'w30', name: 'Uzi', type: 'weapon', subtype: 'pistol', damage: 23, ammo: 21, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+
+  // ── Imported from the weapon card deck (base stats only — special abilities like
+  // Cycle/Dual Wield/Snake Bite/etc. dropped for now; several assume a multi-enemy
+  // Zone system this 1v1 grid engine doesn't have). Damage = card's red starburst
+  // number, speed = lightning-bolt initiative score bucketed (5=fast, 3-4=medium,
+  // 1-2=slow, 0=charged), ammo = top of the card's ammo ladder. Subtypes folded
+  // onto existing categories: SMG/Machine Gun/Machine Pistol → their closest fit,
+  // Laser Cannon → missile (heavy single-charge weapon), Marksman/Sniper Rifle → sniper.
+  // 1-star
+  { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 3, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w32', name: 'Simple Striker', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 2, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w34', name: 'One Shot Wonder', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 1, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w35', name: 'Clover Charm', type: 'weapon', subtype: 'pistol', damage: 3, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
+  // 2-star
+  { id: 'w36', name: 'Fast Fire', type: 'weapon', subtype: 'pistol', damage: 1, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w37', name: 'Zig Zag', type: 'weapon', subtype: 'assault_rifle', damage: 4, ammo: 6, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w38', name: 'Pulse Twins', type: 'weapon', subtype: 'pistol', damage: 2, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w39', name: 'Even Steven', type: 'weapon', subtype: 'shotgun', damage: 4, ammo: 2, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w40', name: 'Rattler Ranger', type: 'weapon', subtype: 'revolver', damage: 5, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  // 3-star
+  { id: 'w41', name: 'Odd Todd', type: 'weapon', subtype: 'pistol', damage: 3, ammo: 7, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w42', name: 'Zap Cannon', type: 'weapon', subtype: 'assault_rifle', damage: 3, ammo: 4, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w43', name: 'Triple Threat', type: 'weapon', subtype: 'shotgun', damage: 6, ammo: 3, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
+  { id: 'w44', name: 'Magnificent Six', type: 'weapon', subtype: 'revolver', damage: 6, ammo: 6, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w45', name: 'Speed Demon', type: 'weapon', subtype: 'assault_rifle', damage: 4, ammo: 6, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
+  // 4-star
+  { id: 'w46', name: 'Sweet Revenge', type: 'weapon', subtype: 'assault_rifle', damage: 5, ammo: 5, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w47', name: 'Tactical Strike', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 8, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w48', name: 'Ranged Rifle', type: 'weapon', subtype: 'sniper', damage: 7, ammo: 8, speed: 'medium', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w49', name: 'Heat Hawk', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 7, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w50', name: 'Supreme Scope', type: 'weapon', subtype: 'sniper', damage: 9, ammo: 6, speed: 'slow', range: 3, icon: '🎯', slot: 'hand' },
+  { id: 'w51', name: 'Atomic Boom', type: 'weapon', subtype: 'explosive', damage: 10, ammo: 1, speed: 'charged', range: 1, icon: '💣', slot: 'hand' },
+  // 5-star
+  { id: 'w52', name: 'Ion Cannon', type: 'weapon', subtype: 'missile', damage: 8, ammo: 1, speed: 'medium', range: 2, icon: '🚀', slot: 'hand' },
+  { id: 'w53', name: 'Master Blaster', type: 'weapon', subtype: 'assault_rifle', damage: 7, ammo: 10, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w54', name: 'Big Bertha', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 14, speed: 'fast', range: 2, icon: '🎯', slot: 'hand' },
+  // Unrated (revolver-heavy set)
+  { id: 'w55', name: 'Lever King', type: 'weapon', subtype: 'assault_rifle', damage: 6, ammo: 5, speed: 'charged', range: 2, icon: '🎯', slot: 'hand' },
+  { id: 'w56', name: 'Raging Rhino', type: 'weapon', subtype: 'revolver', damage: 7, ammo: 4, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w57', name: 'Judgement Day', type: 'weapon', subtype: 'revolver', damage: 9, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
 ];
 // Weapon price = (damage + ammo) × (range + REV_SPEED_FACTOR[speed]).
 // REV_SPEED_FACTOR runs Charged(4) > Slow(3) > Medium(2) > Fast(1) — heavier,
