@@ -174,6 +174,9 @@ function applyLocationDamageBuff(dmg, char, pos, card = null) {
   if (loc.effect === 'hero_zone'    && char.faction === 'hero')                        return Math.ceil(dmg * 1.25);
   if (loc.effect === 'villain_zone' && char.faction === 'villain')                     return Math.ceil(dmg * 1.25);
   if (loc.effect === 'sniper_nest'  && card && card.subtype === 'sniper')              return Math.ceil(dmg * 1.33);
+  // Center-of-map power tile — faction-agnostic, unlike hero/villain zones, so it's
+  // worth contesting regardless of which side you're on.
+  if (loc.effect === 'damage_boost')                                                   return Math.ceil(dmg * 1.25);
   return dmg;
 }
 
@@ -380,41 +383,22 @@ function applyLocationEffects(isCardDrawPhase = true) {
     }
   }
 
-  // Card draws — card-draw phases only
-  if (isCardDrawPhase) {
-    if (pLoc.effect === 'draw_weapon') {
-      const maxTotal = getMaxHandSize(G.playerChar);
-      if (playerTotalCards() < maxTotal && G.weaponDeck.length > 0) {
-        const c = G.weaponDeck.shift();
-        G.playerHand.push(c);
-        logMsg('player', `Armory grants you ${c.name}!`);
-        // Pistol Pete: auto-clone any pistol or revolver drawn into a paired dual-wield copy
-        if (G.playerChar.attribute === 'dual_wield'
-          && (c.subtype === 'pistol' || c.subtype === 'revolver')
-          && playerTotalCards() < maxTotal) {
-          const pairId = 'dwpair_' + Math.random().toString(36).slice(2, 9);
-          c.dualWieldPairId = pairId;
-          const clone = deepClone(c);
-          clone.id = c.id + '_clone_' + Math.random().toString(36).slice(2, 7);
-          clone.dualWieldPairId = pairId;
-          G.playerHand.push(clone);
-          logMsg('player', `🔫 Dual Wield: cloned ${c.name} for paired firing!`);
-        }
-      } else if (playerTotalCards() >= maxTotal) {
-        logMsg('system', 'Your cards are full — Armory card forfeited.');
-      }
-    }
-    if (pLoc.effect === 'draw_defense') {
-      const maxTotal = getMaxHandSize(G.playerChar);
-      if (playerTotalCards() < maxTotal && G.defenseDeck.length > 0) {
-        const c = G.defenseDeck.shift();
-        G.playerHand.push(c);
-        logMsg('player', `Forge grants you ${c.name}!`);
-      } else if (playerTotalCards() >= maxTotal) {
-        logMsg('system', 'Your cards are full — Forge card forfeited.');
-      }
+  // Ammo Station — refills all owned weapons to full ammo, then the tile is spent
+  // for the rest of the match. Fires immediately (not gated to card-draw phases,
+  // since it's one-time rather than a repeating draw).
+  if (pLoc.effect === 'ammo_refill' && !pLoc.used) {
+    pLoc.used = true;
+    const weapons = [...G.playerHand, ...G.playerInPlay].filter(c => c.type === 'weapon');
+    const refillable = weapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
+    for (const c of refillable) c.ammo = c._maxAmmo;
+    if (refillable.length > 0) {
+      logMsg('player', `🔋 ${pLoc.name} refills all your weapons to full ammo! (one-time use — now spent)`);
+    } else {
+      logMsg('system', `🔋 ${pLoc.name} triggers, but your ammo was already full. (one-time use — now spent)`);
     }
   }
+
+  // Card draws for weapons/defense no longer exist — replaced by Ammo Stations above.
 
   // ── Bot tile ───────────────────────────────────────────────────────────────
   const bLoc = G.locations[G.botPos];
@@ -454,18 +438,19 @@ function applyLocationEffects(isCardDrawPhase = true) {
     logMsg('damage', `☠️ ${G.botChar.name} is off a hazard tile — takes 1 toxic dmg!`);
   }
 
+  // Ammo Station (bot) — same one-time full-ammo refill as the player gets.
+  if (bLoc.effect === 'ammo_refill' && !bLoc.used) {
+    bLoc.used = true;
+    const botWeapons = [...G.botHand, ...G.botInPlay].filter(c => c.type === 'weapon');
+    const botRefillable = botWeapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
+    for (const c of botRefillable) c.ammo = c._maxAmmo;
+    if (botRefillable.length > 0) {
+      logMsg('bot', `🔋 Bot's weapons refill to full ammo at ${bLoc.name}. (one-time use — now spent)`);
+    }
+  }
+
   // Bot card draws — card-draw phases only
   if (isCardDrawPhase) {
-    if (bLoc.effect === 'draw_weapon' && G.weaponDeck.length > 0 && botTotalCards() < getMaxHandSize(G.botChar)) {
-      const c = G.weaponDeck.shift();
-      G.botHand.push(c);
-      logMsg('bot', `Bot draws a weapon from Armory.`);
-    }
-    if (bLoc.effect === 'draw_defense' && G.defenseDeck.length > 0 && botTotalCards() < getMaxHandSize(G.botChar)) {
-      const c = G.defenseDeck.shift();
-      G.botHand.push(c);
-      logMsg('bot', `Bot draws a defense card from Forge.`);
-    }
     // Scrap Heap — bot auto-scrap: dump the lowest-value card if it's truly useless
     if (bLoc.effect === 'discard') {
       const allBotCards = [...G.botHand, ...G.botInPlay];
@@ -756,7 +741,8 @@ function endGame(winner, timeLimit = false) {
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
   const { battleFinal } = computeBattleScore(false);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty) : 0;
+  const outcome = won ? 'win' : draw ? 'draw' : 'loss';
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty, outcome) : 0;
   const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
 
   // Character unlocks: winning marks this difficulty beaten for G.botChar. If that
@@ -843,7 +829,7 @@ function retreat() {
   G.gameOver = true;
 
   const { battleFinal } = computeBattleScore(true);
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty) : 0;
+  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty, 'retreat') : 0;
 
   const elapsed = Math.round((Date.now() - G.matchStartTime) / 1000);
   const mins    = Math.floor(elapsed / 60);

@@ -161,7 +161,11 @@ function initGame() {
       }
       if (!defense) defense = dDeck.shift();
     }
-    return [deepClone(weapon), deepClone(defense)];
+    return [weapon, defense].map(c => {
+      const clone = deepClone(c);
+      if (clone && clone.type === 'weapon' && clone.ammo !== undefined) clone._maxAmmo = clone.ammo;
+      return clone;
+    });
   }
 
   // Player's starting hand + passive gear — from the Equip screen loadout if one

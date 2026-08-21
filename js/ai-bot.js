@@ -584,7 +584,6 @@ function botMoveSmart() {
         if (isCritical) {
             if (hasHeal && loc.effect === 'none') score += 300;
             if (loc.effect === 'heal') score += 600;
-            if (loc.effect === 'draw_defense' && !hasHeal) score += 500;
             // Put distance between bot and player when critical
             score += dist * 30;
             return score;
@@ -605,7 +604,6 @@ function botMoveSmart() {
                 // Tanks and support retreat to heal; offensive types are less eager
                 score += botIsTank || botIsSupport ? 500 : 250;
             }
-            if (loc.effect === 'draw_defense' && !hasHeal) score += botIsTank ? 350 : 200;
             if (loc.effect === 'safe_room') score += 200;
             // Offensive bots still want to stay in range even when low — apply softer pull
             if (botIsOffensive) {
@@ -614,8 +612,11 @@ function botMoveSmart() {
             }
         }
 
-        // ── WEAPON DRAW — prioritise if no weapons at all ─────────────────────
-        if (allBotWeapons.length === 0 && hasHandRoom && loc.effect === 'draw_weapon') score += 350;
+        // ── AMMO STATION — prioritize refilling when running low, one-time use ────
+        const hasLowAmmoWeapon = allBotWeapons.some(w => w._maxAmmo !== undefined && w.ammo < w._maxAmmo * 0.5);
+        if (hasLowAmmoWeapon && loc.effect === 'ammo_refill' && !loc.used) score += 350;
+        // Center Power Core — faction-agnostic damage buff, always worth contesting.
+        if (loc.effect === 'damage_boost') score += 250;
 
         // ── SCRAP HEAP — prioritise when holding dead/useless cards ──────────
         // Each dead card adds 120 points of urgency toward the Scrap Heap.

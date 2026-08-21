@@ -2307,6 +2307,8 @@
         <div style="display:flex;align-items:center;gap:8px;">
           <div id="equip-credits" style="font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
           <button class="btn" style="font-size:0.65rem;padding:5px 10px;" onclick="openShop()">🛒 SHOP</button>
+          <button id="equip-confirm-btn" class="btn primary" style="font-size:0.65rem;padding:5px 12px;opacity:0.5;pointer-events:none;"
+            onclick="confirmEquip()">⚔ BEGIN BATTLE</button>
         </div>
       </div>
       <p style="color:var(--muted);font-size:0.72rem;margin-bottom:10px;">
@@ -2367,10 +2369,6 @@
           <div id="equip-picker-list" style="display:none;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto;"></div>
         </div>
       </div>
-      <div style="display:flex;margin-top:14px;">
-        <button id="equip-confirm-btn" class="btn primary" style="padding:10px 24px;opacity:0.5;pointer-events:none;"
-          onclick="confirmEquip()">⚔ BEGIN BATTLE</button>
-      </div>
     </div>
   </div>
 
@@ -2426,7 +2424,7 @@
         WELCOME TO BLAST BATTLES</h2>
       <div style="font-size:0.75rem;line-height:1.9;color:var(--muted);">
         <b style="color:var(--accent)">1. You start with 💰100 and zero gear.</b> Everything has to be bought first — nothing is pre-equipped.<br>
-        <b style="color:var(--accent)">2. Open the 🛒 SHOP and buy an M9 Pistol (💰50).</b> Buy two and you can dual-wield as Pistol Pete — exactly 💰100.<br>
+        <b style="color:var(--accent)">2. Open the 🛒 SHOP and buy a weapon</b> — an M9 Pistol (💰50) is a solid start. Buy two and you can dual-wield as Pistol Pete — exactly 💰100.<br>
         <b style="color:var(--accent)">3. Head to EQUIP</b> and drop your weapon(s) into the hand slots on the paperdoll.<br>
         <b style="color:var(--accent)">4. Pick a difficulty and fight.</b> Winning earns credits — more on harder difficulties — and can unlock new characters to play as.<br>
         <b style="color:var(--accent)">5. Come back to the Shop</b> anytime to buy more weapons, armor, and gear with what you've earned.
