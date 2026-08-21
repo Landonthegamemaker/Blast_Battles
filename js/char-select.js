@@ -1,26 +1,30 @@
 /**
  * Name: char-select.js
  * Description: Character selection screen logic for the game.
- * Handles rendering character grids, sorting, selection, confirmation, and
- * the Bestiary/Challenge flow for unlocking locked characters.
+ * Handles rendering character grids, sorting, selection, confirmation, the
+ * (view-only) Bestiary, and the post-Equip Opponent Select screen.
  * Dependencies (must load first):
  * - character-data.js (CHARACTER_POOL array, STARTER_UNLOCKED_IDS)
  * - audio.js (BB_Audio for music preview)
  * - progression.js (isCharUnlocked, getDefeatProgress — locked-character gating)
- * - equip.js (showEquipScreen() — confirmCharSelect() and startChallenge() both route here)
+ * - equip.js (showEquipScreen() — confirmCharSelect() and backToEquipFromOpponentSelect() both route here)
  * Exports (browser globals):
  * - showCharSelect() - display the character selection screen
  * - selectChar(charId) - select a character by ID (unlocked characters only)
  * - confirmCharSelect() - confirm the current character selection and proceed to the Equip screen
- * - openBestiary(charId) / closeBestiary() - locked character detail + per-difficulty progress
- * - startChallenge(charId, difficulty) - deliberately target a specific locked character +
- *   difficulty instead of waiting on random matchmaking; skips the manual Difficulty screen
+ * - openBestiary(charId) / closeBestiary() - view-only locked character detail + per-difficulty progress
+ * - showOpponentSelect() - reached from Equip's "⚔ BEGIN BATTLE" button; shows every character of
+ *   the opposing faction (locked or unlocked) as a selectable opponent — matchmaking is never random
+ * - selectOpponent(charId) - picks the opponent, proceeds to the Difficulty screen
+ * - selectRandomOpponent() - skips picking a specific opponent, restoring the original
+ *   random-opposite-faction-pick behavior (same logic initGame() always falls back to)
+ * - backToEquipFromOpponentSelect() - returns to Equip without losing anything
  * - showTutorial() / closeTutorial() / maybeShowTutorial() - first-time welcome tutorial,
  *   auto-shown once on a brand-new account (see TUTORIAL_SEEN_KEY), re-triggerable from Help
  * Internal state:
  * - _selectedCharId: currently selected character ID (null if none)
  * - _currentSort: current sorting key for character grids ('faction', 'name', 'hp', 'speed', 'ability')
- * - _challengeTargetCharId / _challengeDifficulty: pending Bestiary Challenge, consumed by initGame()
+ * - _challengeTargetCharId: the opponent picked in Opponent Select, consumed once by initGame()
 */
 'use strict';
 
@@ -151,13 +155,13 @@ function makeCharCard(char) {
     return div;
 }
 
-// ── Bestiary / Challenge flow ────────────────────────────────────────────────
-// Lets the player deliberately target a specific locked character + difficulty
-// instead of waiting on random matchmaking to hand them the exact pairing they
-// still need. Consumed once by initGame() (see game-state.js), then cleared.
-let _challengeTargetCharId = null;
-let _challengeDifficulty = null;
-
+// ── Bestiary (view-only) ─────────────────────────────────────────────────────
+// Shows a locked character's per-difficulty progress. Purely informational —
+// actually picking who to fight now always happens via Opponent Select (see
+// below), reached after Equip, which works the same for locked AND unlocked
+// opponents. This avoids the earlier bug where challenging required a
+// character to already be selected, and going back to fix that wiped the
+// selection, trapping players in a loop between the two screens.
 const DIFFICULTY_LABELS = { easy: '🟢 Easy', medium: '🟡 Medium', hard: '🔴 Hard', impossible: '🤖 Impossible' };
 
 function openBestiary(charId) {
@@ -166,29 +170,14 @@ function openBestiary(charId) {
     const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(charId) : {};
     const glowColor = char.faction === 'hero' ? 'var(--hero)' : 'var(--villain)';
 
-    const playerChar = _selectedCharId ? CHARACTER_POOL.find(c => c.id === _selectedCharId) : null;
-    const oppositeFactionPicked = playerChar && playerChar.faction !== char.faction;
-
     let rows = '';
     for (const diff of ['easy', 'medium', 'hard', 'impossible']) {
         const beaten = !!progress[diff];
-        if (beaten) {
-            rows += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:5px;background:rgba(68,255,136,0.06);">
-        <span style="font-size:0.7rem;">${DIFFICULTY_LABELS[diff]}</span>
-        <span style="font-size:0.7rem;color:var(--green);">✓ BEATEN</span>
-      </div>`;
-        } else {
-            const enabled = !!oppositeFactionPicked;
-            rows += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:5px;">
-        <span style="font-size:0.7rem;">${DIFFICULTY_LABELS[diff]}</span>
-        <button class="btn primary" style="font-size:0.6rem;padding:4px 10px;${enabled ? '' : 'opacity:0.4;pointer-events:none;'}" onclick="startChallenge('${charId}','${diff}')">🎯 CHALLENGE</button>
-      </div>`;
-        }
+        rows += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:5px;${beaten ? 'background:rgba(68,255,136,0.06);' : ''}">
+      <span style="font-size:0.7rem;">${DIFFICULTY_LABELS[diff]}</span>
+      <span style="font-size:0.7rem;color:${beaten ? 'var(--green)' : 'var(--muted)'};">${beaten ? '✓ BEATEN' : 'Not yet'}</span>
+    </div>`;
     }
-
-    const hint = oppositeFactionPicked
-        ? ''
-        : `<div style="font-size:0.62rem;color:var(--accent2);margin-bottom:8px;">⚠ Pick your own ${char.faction === 'hero' ? 'villain' : 'hero'} character first (on the main screen), then come back to challenge.</div>`;
 
     document.getElementById('bestiary-body').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
@@ -196,8 +185,7 @@ function openBestiary(charId) {
       <h2 style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.1rem;color:${glowColor};margin:0;">${char.name}</h2>
     </div>
     <div style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">${char.faction.toUpperCase()} · LOCKED</div>
-    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:10px;">Win against ${char.name} on every difficulty to unlock them.</div>
-    ${hint}
+    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:10px;">Win against ${char.name} on every difficulty to unlock them. You can fight them as an opponent — pick your own character, gear up, then choose them from the opponent list — even before they're unlocked.</div>
     ${rows}
   `;
     document.getElementById('bestiary-overlay').classList.remove('hidden');
@@ -207,15 +195,69 @@ function closeBestiary() {
     document.getElementById('bestiary-overlay').classList.add('hidden');
 }
 
-/** Sets up a deliberate challenge match against a specific locked character at a
- *  specific difficulty, then proceeds through the normal Equip flow — the
- *  difficulty is already decided, so the Difficulty screen is skipped. */
-function startChallenge(charId, difficulty) {
-    if (!_selectedCharId) return; // shouldn't happen — button is disabled until a character is picked
+// ── Opponent Select ───────────────────────────────────────────────────────────
+// Reached after Equip via the "⚔ BEGIN BATTLE" button. Always shows every
+// character of the opposing faction — locked or unlocked — since locked ones
+// can still be fought (that's how they get unlocked). Picking one leads to the
+// Difficulty screen; matchmaking is never random.
+let _challengeTargetCharId = null;
+
+function showOpponentSelect() {
+    const playerChar = CHARACTER_POOL.find(c => c.id === _selectedCharId);
+    if (!playerChar) return;
+    const oppFaction = playerChar.faction === 'hero' ? 'villain' : 'hero';
+    const opponents = CHARACTER_POOL.filter(c => c.faction === oppFaction);
+
+    const grid = document.getElementById('opponent-select-grid');
+    grid.innerHTML = '';
+    for (const opp of opponents) grid.appendChild(makeOpponentCard(opp));
+
+    document.getElementById('opponent-select-overlay').classList.remove('hidden');
+}
+
+function makeOpponentCard(char) {
+    const glowColor = char.faction === 'hero' ? 'var(--hero)' : 'var(--villain)';
+    const glowRgb = char.faction === 'hero' ? '74,184,255' : '196,75,255';
+    const unlocked = (typeof isCharUnlocked === 'function') ? isCharUnlocked(char.id) : true;
+    const div = document.createElement('div');
+    div.style.cssText = 'border-radius:12px;border:1.5px solid ' + glowColor + ';box-shadow:0 0 10px rgba(' + glowRgb + ',0.35);background:rgba(' + glowRgb + ',0.06);padding:0 0 6px 0;cursor:pointer;transition:all 0.15s;user-select:none;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;text-align:center;height:150px;overflow:hidden;position:relative;';
+    const imgHtml = char.img
+        ? `<img src="${char.img}" style="width:100%;height:60px;object-fit:cover;object-position:top center;border-radius:6px 6px 0 0;margin-bottom:3px;display:block;">`
+        : `<div style="width:100%;height:60px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:rgba(${glowRgb},0.15);border-radius:6px 6px 0 0;margin-bottom:3px;">${char.icon}</div>`;
+    div.innerHTML = `${imgHtml}
+    <div style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:0.62rem;color:${glowColor};margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 6px;">${char.icon} ${char.name}</div>
+    <div style="font-size:0.46rem;color:var(--text);line-height:1.5;">
+      <div>❤ <b>${char.attribute === 'shadow_clone' ? '?' : char.hp}</b> HP</div>
+      <div>⚡ SPD <b>${char.attribute === 'shadow_clone' ? '?' : char.speed}</b></div>
+    </div>
+  `;
+    if (!unlocked) {
+        const beatenCount = ['easy', 'medium', 'hard', 'impossible'].filter(d => getDefeatProgress(char.id)[d]).length;
+        const badge = document.createElement('div');
+        badge.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.7);border-radius:4px;padding:1px 5px;font-family:\'Share Tech Mono\',monospace;font-size:0.4rem;color:var(--accent);';
+        badge.textContent = `🔒 ${beatenCount}/4`;
+        div.appendChild(badge);
+    }
+    div.addEventListener('click', () => selectOpponent(char.id));
+    return div;
+}
+
+function selectOpponent(charId) {
     _challengeTargetCharId = charId;
-    _challengeDifficulty = difficulty;
-    closeBestiary();
-    document.getElementById('char-select-overlay').style.display = 'none';
+    document.getElementById('opponent-select-overlay').classList.add('hidden');
+    document.getElementById('difficulty-overlay').classList.remove('hidden');
+}
+
+/** Skips picking a specific opponent — leaves _challengeTargetCharId unset so
+ *  initGame()'s original random-opposite-faction-pick logic runs unchanged. */
+function selectRandomOpponent() {
+    _challengeTargetCharId = null;
+    document.getElementById('opponent-select-overlay').classList.add('hidden');
+    document.getElementById('difficulty-overlay').classList.remove('hidden');
+}
+
+function backToEquipFromOpponentSelect() {
+    document.getElementById('opponent-select-overlay').classList.add('hidden');
     showEquipScreen();
 }
 

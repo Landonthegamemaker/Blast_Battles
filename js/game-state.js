@@ -76,7 +76,7 @@ function initGame() {
 
   // Use player's selected character; bot gets a random from the opposite faction —
   // UNLESS a Bestiary Challenge picked a specific locked character to fight (see
-  // char-select.js startChallenge()), in which case that exact character is forced.
+  // char-select.js showOpponentSelect()/selectOpponent()), in which case that exact character is forced.
   const selectedChar = CHARACTER_POOL.find(c => c.id === _selectedCharId);
   if (!selectedChar && !charPool[0]) {
     console.error('No characters available in pool. Check CHARACTER_POOL is populated.');

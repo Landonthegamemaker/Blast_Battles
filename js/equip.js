@@ -26,7 +26,7 @@
  *                           always mirrors the currently-selected character
  *   showEquipScreen()    — called from char-select.js on confirm; loads that character's saved loadout
  *   openSlotPicker(slot) — shows owned items for a slot in the side panel
- *   confirmEquip()       — validates (needs at least 1 hand item) and proceeds to difficulty select
+ *   confirmEquip()       — validates (needs at least 1 hand item) and proceeds to Opponent Select
  *   backToCharSelect()   — returns to character select; current loadout is already saved
  *
  * ── Rules enforced here ─────────────────────────────────────────────────
@@ -268,13 +268,5 @@ function _updateEquipConfirmState() {
 function confirmEquip() {
   if (!PlayerLoadout.hand1 && !PlayerLoadout.hand2) return;
   document.getElementById('equip-overlay').classList.add('hidden');
-  // Challenge flow — the difficulty (and opponent) were already picked from the
-  // Bestiary, so skip the manual Difficulty screen and start immediately.
-  if (typeof _challengeTargetCharId !== 'undefined' && _challengeTargetCharId && _challengeDifficulty) {
-    const diff = _challengeDifficulty;
-    _challengeDifficulty = null; // _challengeTargetCharId itself is consumed inside initGame()
-    startWithDifficulty(diff);
-    return;
-  }
-  document.getElementById('difficulty-overlay').classList.remove('hidden');
+  showOpponentSelect();
 }
