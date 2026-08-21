@@ -1,50 +1,34 @@
 /**
  * equip.js — Equip screen: pre-match 8-slot paperdoll loadout selection.
  * Dependencies (must load first): data.js (ALL_EQUIPPABLE, getAllowedWeaponSubtypes),
- *   progression.js (isOwned/getOwnedQuantity/getCredits), char-select.js (_selectedCharId, showCharSelect)
- *
- * ── Persistence model ──────────────────────────────────────────────────────
- * Each character has their OWN saved loadout — switching characters no longer
- * loses or corrupts anything; picking Pete's guns back up after playing Macy
- * shows exactly what Pete had equipped last time. All loadouts are persisted to
- * localStorage under 'bb-loadouts', keyed by character id.
- *
- * The `PlayerLoadout` global always mirrors whichever character is CURRENTLY
- * selected (loaded fresh in showEquipScreen(), saved on every pick) — this
- * keeps game-state.js's initGame() able to just read `PlayerLoadout.hand1` etc.
- * unchanged, regardless of the per-character storage underneath.
- *
- * Ownership is quantity-based (progression.js) — the same physical item can be
- * equipped into more than one slot on ONE character if you own enough copies
- * (e.g. own 2 RPG-7s → dual-wield RPGs on Pete), and completely independently,
- * a DIFFERENT character's saved loadout can reference that same owned weapon
- * too — only one character is ever actually fielded in a match at a time, so
- * there's no real conflict in two characters' loadouts both pointing at it.
+ *   progression.js (isOwned/getCredits), char-select.js (_selectedCharId, showCharSelect)
+ * Reads/writes the global `PlayerLoadout` object, consumed by initGame() in game-state.js.
  *
  * Exports (browser globals):
  *   PlayerLoadout        — { head, chest, legs, feet, armL, armR, hand1, hand2 } (item ids or null)
- *                           always mirrors the currently-selected character
- *   showEquipScreen()    — called from char-select.js on confirm; loads that character's saved loadout
+ *   showEquipScreen()    — called from char-select.js on confirm
  *   openSlotPicker(slot) — shows owned items for a slot in the side panel
  *   confirmEquip()       — validates (needs at least 1 hand item) and proceeds to difficulty select
- *   backToCharSelect()   — returns to character select; current loadout is already saved
+ *   backToCharSelect()   — returns to character select without losing what's still valid
  *
  * ── Rules enforced here ─────────────────────────────────────────────────
  *   - Weapon restrictions: a character with a restricted attribute (e.g. Lunging Logan —
- *     melee only) can't put a disallowed weapon in a hand slot.
- *   - 2-armor cap: head/chest/legs/feet/armL/armR are all armor. At most 2 of those
- *     6 slots may be filled at once, same as the in-match "2 equipped defense items
- *     max" rule.
- *   - Quantity cap: an item can occupy multiple slots on ONE character only up to how
- *     many copies you own — own 1, it locks everywhere else once placed; own 2+, it
- *     stays available for a second slot.
- *   - Switching characters (or selling gear) revalidates the loadout on open: anything
- *     no longer usable (wrong weapon subtype, armor for Pete/Tracy, or sold below what's
- *     needed) is cleared automatically instead of silently staying equipped-but-broken.
+ *     melee only) can't put a disallowed weapon in a hand slot. Mirrors the in-match check
+ *     in game-state.js playerPlayCard() (see WEAPON_ATTRIBUTE_RESTRICTIONS in data.js).
+ *   - 2-armor cap: head/chest/legs/feet/armL/armR are all armor (type:'defense', defense>0).
+ *     At most 2 of those 6 slots may be filled at once, same as the in-match
+ *     "2 equipped defense items max" rule (game-state.js playerPlayCard).
+ *   - One copy per item: an owned item can only occupy ONE loadout slot at a time —
+ *     you can't equip the same single copy into both hand slots (or both arm slots)
+ *     to effectively get two of it for the price of one.
+ *   - Switching characters revalidates the whole loadout: anything the new character
+ *     isn't allowed to use (wrong weapon subtype, armor for Pete/Tracy) is cleared
+ *     automatically instead of silently staying equipped-but-unusable.
  */
 'use strict';
 
-const LOADOUTS_KEY = 'bb-loadouts';
+let PlayerLoadout = { head: null, chest: null, legs: null, feet: null, armL: null, armR: null, hand1: null, hand2: null };
+let _activeEquipSlot = null;
 
 // Which ALL_EQUIPPABLE `.slot` value each paperdoll slot pulls from.
 const EQUIP_SLOT_POOL = {
@@ -53,30 +37,6 @@ const EQUIP_SLOT_POOL = {
 };
 const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'];
 const ALL_SLOTS = [...ARMOR_SLOTS, 'hand1', 'hand2'];
-
-function _emptyLoadout() {
-  return { head: null, chest: null, legs: null, feet: null, armL: null, armR: null, hand1: null, hand2: null };
-}
-
-let PlayerLoadout = _emptyLoadout();
-let _activeEquipSlot = null;
-
-function _loadAllLoadouts() {
-  try {
-    const raw = localStorage.getItem(LOADOUTS_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return (parsed && typeof parsed === 'object') ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function _saveCurrentLoadout() {
-  if (!_selectedCharId) return;
-  const all = _loadAllLoadouts();
-  all[_selectedCharId] = PlayerLoadout;
-  localStorage.setItem(LOADOUTS_KEY, JSON.stringify(all));
-}
 
 function _slotShortStat(item) {
   if (item.type === 'weapon') return `${item.damage} DMG`;
@@ -128,37 +88,9 @@ function _validateLoadoutForChar(char) {
   }
 }
 
-/**
- * Drops any slot whose item has since been sold below what this loadout needs —
- * e.g. if 2 slots reference an item you now only own 1 of, the second is cleared
- * (first occurrence, in slot order, wins).
- */
-function _validateQuantitiesForLoadout() {
-  const counts = {};
-  for (const slot of ALL_SLOTS) {
-    const id = PlayerLoadout[slot];
-    if (id) counts[id] = (counts[id] || 0) + 1;
-  }
-  for (const id in counts) {
-    const owned = getOwnedQuantity(id);
-    if (counts[id] <= owned) continue;
-    let keep = owned;
-    for (const slot of ALL_SLOTS) {
-      if (PlayerLoadout[slot] !== id) continue;
-      if (keep > 0) keep--;
-      else PlayerLoadout[slot] = null;
-    }
-  }
-}
-
 function showEquipScreen() {
   _activeEquipSlot = null;
-  const all = _loadAllLoadouts();
-  PlayerLoadout = all[_selectedCharId] ? { ..._emptyLoadout(), ...all[_selectedCharId] } : _emptyLoadout();
   _validateLoadoutForChar(_currentPlayerChar());
-  _validateQuantitiesForLoadout();
-  _saveCurrentLoadout(); // persist any cleanup immediately, so it doesn't re-flash next open
-
   document.getElementById('equip-credits').textContent = `💰 ${getCredits()}`;
   document.querySelectorAll('.equip-slot').forEach(btn => {
     const slot = btn.dataset.slot;
@@ -175,7 +107,8 @@ function showEquipScreen() {
   _updateEquipConfirmState();
 }
 
-/** Returns to character select. The current character's loadout is already saved. */
+/** Returns to character select. Loadout picks that are still valid for whatever
+ *  character gets picked next are kept — showEquipScreen() re-validates on entry. */
 function backToCharSelect() {
   document.getElementById('equip-overlay').classList.add('hidden');
   showCharSelect();
@@ -190,6 +123,9 @@ function openSlotPicker(slot) {
   const isArmorSlot = ARMOR_SLOTS.includes(slot);
   const char = _currentPlayerChar();
   const armorCapReached = isArmorSlot && !PlayerLoadout[slot] && _armorSlotsFilledCount(slot) >= 2;
+  // Every other slot's current pick, so we can block equipping the same single
+  // owned copy into more than one slot at once (see file header).
+  const usedElsewhere = new Set(ALL_SLOTS.filter(s => s !== slot && PlayerLoadout[s]).map(s => PlayerLoadout[s]));
 
   const owned = ALL_EQUIPPABLE.filter(i => i.slot === poolSlot && isOwned(i.id));
   const emptyEl = document.getElementById('equip-picker-empty');
@@ -223,15 +159,8 @@ function openSlotPicker(slot) {
     const weaponBlocked = isHandSlot && _isWeaponItemBlocked(char, item);
     const defenseBlocked = _isDefenseItemBlocked(char, item);
     const armorBlocked = armorCapReached && item.id !== PlayerLoadout[slot];
-
-    // Quantity check: how many units does this ONE character's loadout already use
-    // elsewhere? If that's >= how many you own, there's nothing left for this slot.
-    const usedElsewhereCount = ALL_SLOTS.filter(s => s !== slot && PlayerLoadout[s] === item.id).length;
-    const ownedQty = getOwnedQuantity(item.id);
-    const availableUnits = ownedQty - usedElsewhereCount;
-    const quantityBlocked = availableUnits <= 0;
-
-    const locked = weaponBlocked || defenseBlocked || armorBlocked || quantityBlocked;
+    const duplicateBlocked = usedElsewhere.has(item.id);
+    const locked = weaponBlocked || defenseBlocked || armorBlocked || duplicateBlocked;
 
     const row = document.createElement('div');
     row.className = 'equip-pick-row' + (PlayerLoadout[slot] === item.id ? ' selected' : '') + (locked ? ' locked' : '');
@@ -239,9 +168,8 @@ function openSlotPicker(slot) {
       ? `🔒 ${char.name} can't use this`
       : defenseBlocked ? (char.attribute === 'dual_wield' ? `🔒 Pete's hands are full` : `🔒 ${char.name} carries weapons only`)
       : armorBlocked ? '🔒 2 armor max'
-      : quantityBlocked ? `🔒 Own ${ownedQty}, all in use` : '';
-    const qtyHint = !locked && ownedQty > 1 ? ` · own ${ownedQty}` : '';
-    row.innerHTML = `<span class="epr-icon">${item.icon}</span><span class="epr-name">${item.name}</span><span class="epr-stat">${lockNote || (_slotShortStat(item) + qtyHint)}</span>`;
+      : duplicateBlocked ? '🔒 Already equipped elsewhere' : '';
+    row.innerHTML = `<span class="epr-icon">${item.icon}</span><span class="epr-name">${item.name}</span><span class="epr-stat">${lockNote || _slotShortStat(item)}</span>`;
     if (!locked) row.onclick = () => _pickSlotItem(slot, item.id);
     listEl.appendChild(row);
   }
@@ -249,7 +177,6 @@ function openSlotPicker(slot) {
 
 function _pickSlotItem(slot, itemId) {
   PlayerLoadout[slot] = itemId;
-  _saveCurrentLoadout();
   const btn = document.querySelector(`.equip-slot[data-slot="${slot}"]`);
   const item = itemId ? ALL_EQUIPPABLE.find(i => i.id === itemId) : null;
   btn.classList.toggle('filled', !!item);
@@ -268,13 +195,5 @@ function _updateEquipConfirmState() {
 function confirmEquip() {
   if (!PlayerLoadout.hand1 && !PlayerLoadout.hand2) return;
   document.getElementById('equip-overlay').classList.add('hidden');
-  // Challenge flow — the difficulty (and opponent) were already picked from the
-  // Bestiary, so skip the manual Difficulty screen and start immediately.
-  if (typeof _challengeTargetCharId !== 'undefined' && _challengeTargetCharId && _challengeDifficulty) {
-    const diff = _challengeDifficulty;
-    _challengeDifficulty = null; // _challengeTargetCharId itself is consumed inside initGame()
-    startWithDifficulty(diff);
-    return;
-  }
   document.getElementById('difficulty-overlay').classList.remove('hidden');
 }

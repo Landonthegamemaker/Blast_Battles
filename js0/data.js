@@ -164,12 +164,6 @@ const GEAR_POOL_BASE = [
 ];
 const GEAR_POOL = GEAR_POOL_BASE.map(g => ({ ...g, price: g.defense * g.durability }));
 
-// ── Character unlocks ────────────────────────────────────────────────────
-// Everyone else starts locked — win against a character on EVERY difficulty
-// (easy/medium/hard/impossible) to unlock them. See progression.js for the
-// win-tracking functions and char-select.js for the Bestiary/Challenge UI.
-const STARTER_UNLOCKED_IDS = ['c1', 'c3']; // Pistol Pete, Lunging Logan
-
 // Every equippable item across all three pools, for the Shop and Equip screens.
 const ALL_EQUIPPABLE = [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL];
 
@@ -217,14 +211,6 @@ const DEFAULT_OWNED_IDS = (function () {
 
   return [...new Set([...fixed, ...cheapestPerSlot, cheapestHandGear, ...coverageIds])];
 })();
-
-// ── Character unlocks ────────────────────────────────────────────────────
-// Everyone else starts locked — unlocked permanently the first time you defeat
-// them as a bot opponent (see combat.js endGame(), progression.js unlockChar()).
-// Picked Commando Cole & Toxic Trooper as starters specifically because neither
-// has a weapon-subtype restriction or a movement-phase lock — the least
-// confusing first-match experience for a brand new player.
-const STARTER_CHARACTER_IDS = ['c7', 'c5']; // Commando Cole (hero), Toxic Trooper (villain)
 
 // ── Character cards (16: 8 heroes, 8 villains) ──────────────────────────────
 const CHARACTER_POOL = [

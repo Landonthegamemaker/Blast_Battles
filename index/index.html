@@ -1464,10 +1464,9 @@
     }
 
     .shop-card button {
-      flex: 1;
-      min-width: 0;
+      width: 100%;
       margin-top: 3px;
-      font-size: 0.52rem;
+      font-size: 0.55rem;
       padding: 4px 2px;
     }
 
@@ -2210,18 +2209,18 @@
       style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:95vw;max-width:900px;max-height:92vh;overflow-y:auto;padding:12px 16px;box-sizing:border-box;">
 
       <!-- Title row: centered -->
-      <!-- Title row: truly centered, credits/shop/confirm grouped on the right -->
+      <!-- Title row: truly centered, confirm absolutely right -->
       <div style="position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:4px;">
+        <div style="position:absolute;left:0;display:flex;align-items:center;gap:6px;">
+          <div id="charselect-credits" style="font-size:0.65rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
+          <button class="btn" style="font-size:0.6rem;padding:4px 8px;" onclick="openShop()">🛒 SHOP</button>
+        </div>
         <h2
           style="font-family:&#39;Black Ops One&#39;,&#39;Impact&#39;,&#39;Arial Black&#39;,sans-serif;font-size:1.2rem;color:var(--accent);letter-spacing:2px;margin:0;">
           CHOOSE YOUR CHARACTER</h2>
-        <div style="position:absolute;right:0;display:flex;align-items:center;gap:8px;">
-          <div id="charselect-credits" style="font-size:0.65rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
-          <button class="btn" style="font-size:0.6rem;padding:4px 8px;" onclick="openShop()">🛒 SHOP</button>
-          <button class="btn primary" id="char-select-confirm" onclick="confirmCharSelect()" disabled=""
-            style="padding:5px 16px;font-size:0.78rem;flex-shrink:0;opacity:0;pointer-events:none;">CONFIRM
-            →</button>
-        </div>
+        <button class="btn primary" id="char-select-confirm" onclick="confirmCharSelect()" disabled=""
+          style="position:absolute;right:0;padding:5px 16px;font-size:0.78rem;flex-shrink:0;opacity:0;pointer-events:none;">CONFIRM
+          →</button>
       </div>
       <!-- Preview: single compact line -->
       <div id="char-select-preview"
@@ -2387,14 +2386,6 @@
   </div>
 
   <!-- Help Modal -->
-  <!-- Bestiary — locked character detail + challenge-a-specific-difficulty picker -->
-  <div class="modal-overlay hidden" id="bestiary-overlay">
-    <div class="modal" style="max-width:420px;text-align:center;">
-      <div id="bestiary-body"><!-- populated by openBestiary() --></div>
-      <button class="btn primary" style="width:100%;margin-top:12px;" onclick="closeBestiary()">CLOSE</button>
-    </div>
-  </div>
-
   <div class="modal-overlay hidden" id="help-overlay">
     <div class="modal" style="max-width:520px;text-align:left;">
       <h2 style="font-size:1.2rem;margin-bottom:12px;">HOW TO PLAY</h2>

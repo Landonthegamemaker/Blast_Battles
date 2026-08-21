@@ -759,17 +759,6 @@ function endGame(winner, timeLimit = false) {
   const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty) : 0;
   const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
 
-  // Character unlocks: winning marks this difficulty beaten for G.botChar. If that
-  // was the last of the 4 difficulties needed, they're now unlocked to play as.
-  let unlockStr = '';
-  if (won && typeof recordDefeat === 'function' && typeof isCharUnlocked === 'function') {
-    const wasUnlockedBefore = isCharUnlocked(G.botChar.id);
-    recordDefeat(G.botChar.id, G.difficulty);
-    if (!wasUnlockedBefore && isCharUnlocked(G.botChar.id)) {
-      unlockStr = ` 🔓 ${G.botChar.name} UNLOCKED!`;
-    }
-  }
-
   const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
   const pHealWon = G.playerHealTotal > G.botHealTotal;
   const edge     = !pDmgWon && !pHealWon ? 'DMG & Healing'
@@ -784,12 +773,12 @@ function endGame(winner, timeLimit = false) {
   } else if (timeLimit) {
     title = won ? '🏆 VICTORY! ⏳' : '💀 DEFEATED ⏳';
     msg   = won
-      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}`
+      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}`
       : `Time's up — ${G.botChar.name} outscored you in ${edge}.${creditsStr}`;
   } else {
     title = won ? '🏆 VICTORY!' : '💀 DEFEATED';
     msg   = won
-      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}`
+      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}`
       : (G.lastKillingBlow
           ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.${creditsStr}`
           : `${G.botChar.name} has eliminated you.${creditsStr}`);

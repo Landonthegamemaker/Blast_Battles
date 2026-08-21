@@ -74,9 +74,7 @@ function initGame() {
   const defenseDeck = shuffle(deepClone(DEFENSE_POOL));
   const charPool = shuffle(deepClone(CHARACTER_POOL));
 
-  // Use player's selected character; bot gets a random from the opposite faction —
-  // UNLESS a Bestiary Challenge picked a specific locked character to fight (see
-  // char-select.js startChallenge()), in which case that exact character is forced.
+  // Use player's selected character; bot gets a random from the opposite faction
   const selectedChar = CHARACTER_POOL.find(c => c.id === _selectedCharId);
   if (!selectedChar && !charPool[0]) {
     console.error('No characters available in pool. Check CHARACTER_POOL is populated.');
@@ -85,11 +83,7 @@ function initGame() {
   const playerChar = deepClone(selectedChar || charPool[0]);
   const oppFaction = playerChar.faction === 'hero' ? 'villain' : 'hero';
   const botCandidates = charPool.filter(c => c.faction === oppFaction && c.id !== playerChar.id);
-  const challengeTarget = (typeof _challengeTargetCharId !== 'undefined' && _challengeTargetCharId)
-    ? CHARACTER_POOL.find(c => c.id === _challengeTargetCharId)
-    : null;
-  const botChar = deepClone(challengeTarget || botCandidates[0] || charPool.find(c => c.id !== playerChar.id));
-  _challengeTargetCharId = null; // one-shot — consumed
+  const botChar = deepClone(botCandidates[0] || charPool.find(c => c.id !== playerChar.id));
 
   // The Shadow: mirrors the opponent's attribute, speed, and HP
   function applyShadowMirror(shadow, mirror) {
