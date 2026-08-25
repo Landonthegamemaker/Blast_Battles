@@ -284,7 +284,7 @@ function hpBarColor(pct) {
         <div class="card-stat"><span class="card-stat-label">RNG</span><span class="card-stat-value">${card.subtype === 'melee' ? '0sp' : `0–${card.range}sp`}</span></div>
         <div class="card-stat"><span class="card-stat-label">SPD</span><span class="card-stat-value" style="color:${speedColor}">${card.speed.toUpperCase()}</span></div>
       </div>
-      <div class="card-footer"><div class="ammo-pips">${Array.from({ length: Math.min(card.ammo, 10) }, () => '<div class="ammo-pip"></div>').join('')}</div><span style="font-size:0.45rem;color:var(--muted);">${card.ammo}★</span></div>
+      <div class="card-footer"><div class="ammo-pips">${Array.from({ length: Math.min(card.ammo, 10) }, () => '<div class="ammo-pip"></div>').join('')}</div><span style="font-size:0.45rem;color:var(--muted);">${card.ammo}⊹</span></div>
     `;
       } else if (card.type === 'defense') {
         const isHeal = card.healAmount > 0;

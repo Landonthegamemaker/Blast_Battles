@@ -272,7 +272,7 @@ function initGame() {
   }
 
   render();
-  BB_Audio.startGameplay(G.playerChar.id);
+  if (typeof BB_Audio !== 'undefined') { try { BB_Audio.startGameplay(G.playerChar.id); } catch (e) { console.warn('BB_Audio.startGameplay failed:', e); } }
   startPhase();
 }
 

@@ -721,7 +721,7 @@ function buildModalStatsHTML(opts) {
  */
 function endGame(winner, timeLimit = false) {
   G.gameOver = true;
-  BB_Audio.playEndMusic(winner, G.playerChar.faction);
+  if (typeof BB_Audio !== 'undefined') { try { BB_Audio.playEndMusic(winner, G.playerChar.faction); } catch (e) { console.warn('BB_Audio.playEndMusic failed:', e); } }
 
   const won     = winner === 'player';
   const draw    = winner === 'draw';

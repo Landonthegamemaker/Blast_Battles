@@ -149,8 +149,10 @@ function playerMove(locIndex) {
     if (!G.revealedTiles) G.revealedTiles = new Set();
     G.revealedTiles.add(locIndex);
     G.playerMovedThisPhase = true;
-    BB_Audio.stopSfx();
-    BB_Audio.playZoneSfx(G.locations[locIndex].effect);
+    if (typeof BB_Audio !== 'undefined') {
+      try { BB_Audio.stopSfx(); BB_Audio.playZoneSfx(G.locations[locIndex].effect); }
+      catch (e) { console.warn('BB_Audio SFX failed:', e); }
+    }
   } else {
     logMsg('system', 'That location is not reachable this turn.'); return;
   }

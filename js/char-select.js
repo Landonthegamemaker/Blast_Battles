@@ -191,17 +191,40 @@ function makeCharCard(char) {
     const glowColor = isHero ? 'var(--hero)' : 'var(--villain)';
     const glowRgb = isHero ? '74,184,255' : '196,75,255';
     const unlocked = (typeof isCharUnlocked === 'function') ? isCharUnlocked(char.id) : true;
+    const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(char.id) : {};
+    const beatenCount = ['easy', 'medium', 'hard', 'impossible'].filter(d => progress[d]).length;
+    const progressPct = unlocked ? 100 : (beatenCount / 4) * 100;
     const div = document.createElement('div');
     div.dataset.charId = char.id;
-    const lockedFilter = unlocked ? '' : 'filter:grayscale(0.85) brightness(0.55);';
-    div.style.cssText = 'border-radius:12px;border:1.5px solid ' + glowColor + ';box-shadow:0 0 10px rgba(' + glowRgb + ',0.35);background:rgba(' + glowRgb + ',0.06);padding:0 0 6px 0;cursor:' + (unlocked ? 'pointer' : 'default') + ';transition:all 0.15s;user-select:none;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;text-align:center;height:160px;overflow:hidden;position:relative;' + lockedFilter;
+    div.style.cssText = 'border-radius:12px;border:1.5px solid ' + glowColor + ';box-shadow:0 0 10px rgba(' + glowRgb + ',0.35);background:rgba(' + glowRgb + ',0.06);padding:0 0 6px 0;cursor:' + (unlocked ? 'pointer' : 'default') + ';transition:all 0.15s;user-select:none;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;text-align:center;height:160px;overflow:hidden;position:relative;';
     const isShadow = char.name === 'The Shadow' || char.name.startsWith('Dark ');
     const shadowCardFilter = isShadow ? 'filter:brightness(0.7) saturate(0.4) hue-rotate(200deg);' : '';
     const imgPos = (isShadow ? '50% 20%' : 'top center');
-    div.innerHTML = (char.img
-        ? `<img src="${char.img}" style="width:100%;height:60px;object-fit:cover;object-position:${imgPos};border-radius:6px 6px 0 0;margin-bottom:3px;display:block;${shadowCardFilter}">`
-        : `<div style="width:100%;height:60px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:rgba(${glowRgb},0.15);border-radius:6px 6px 0 0;margin-bottom:3px;">${char.icon}</div>`
-    ) +
+
+    // Locked characters: the portrait fills in with color from LEFT to RIGHT as
+    // unlock progress (beaten difficulties / 4) increases, instead of a flat
+    // grayscale treatment — a grayscale base layer with a full-color copy on top,
+    // clipped to show only the leftmost progressPct% of the image.
+    let imageBlock;
+    if (char.img) {
+        if (unlocked) {
+            imageBlock = `<img src="${char.img}" style="width:100%;height:60px;object-fit:cover;object-position:${imgPos};border-radius:6px 6px 0 0;margin-bottom:3px;display:block;${shadowCardFilter}">`;
+        } else {
+            imageBlock = `<div style="position:relative;width:100%;height:60px;border-radius:6px 6px 0 0;margin-bottom:3px;overflow:hidden;">
+        <img src="${char.img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${imgPos};filter:grayscale(1) brightness(0.4);${shadowCardFilter}">
+        <img src="${char.img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${imgPos};clip-path:inset(0 ${100 - progressPct}% 0 0);transition:clip-path 0.3s;${shadowCardFilter}">
+      </div>`;
+        }
+    } else {
+        imageBlock = unlocked
+            ? `<div style="width:100%;height:60px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:rgba(${glowRgb},0.15);border-radius:6px 6px 0 0;margin-bottom:3px;">${char.icon}</div>`
+            : `<div style="position:relative;width:100%;height:60px;border-radius:6px 6px 0 0;margin-bottom:3px;overflow:hidden;background:rgba(120,120,120,0.15);">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;filter:grayscale(1) brightness(0.5);">${char.icon}</div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:rgba(${glowRgb},0.15);clip-path:inset(0 ${100 - progressPct}% 0 0);transition:clip-path 0.3s;">${char.icon}</div>
+      </div>`;
+    }
+
+    div.innerHTML = imageBlock +
         `<div style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:0.62rem;color:${glowColor};margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 6px;">${char.icon} ${char.name}</div>
     <div style="font-family:'Share Tech Mono','Courier New',monospace;font-size:0.38rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">${char.faction.toUpperCase()}</div>
     <div style="font-size:0.46rem;color:var(--text);line-height:1.5;margin-bottom:3px;width:100%;padding:0 6px;box-sizing:border-box;">
@@ -212,15 +235,16 @@ function makeCharCard(char) {
             `<div style="font-size:0.42rem;color:var(--accent);background:rgba(232,184,75,0.08);border:1px solid rgba(232,184,75,0.2);border-radius:3px;padding:2px 4px;width:calc(100% - 12px);box-sizing:border-box;line-height:1.3;margin:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ ${ability}</div>`
             + (weakness ? `<div style="font-size:0.40rem;color:var(--accent2);background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.3);border-radius:3px;padding:2px 4px;width:calc(100% - 12px);box-sizing:border-box;line-height:1.3;margin:2px 6px 0;white-space:normal;overflow:hidden;">⚠ ${weakness}</div>` : '')
         )(char.attrDesc.split(' · '))}`;
+
     if (unlocked) {
         div.addEventListener('click', () => selectChar(char.id));
     } else {
-        const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(char.id) : {};
-        const beatenCount = ['easy', 'medium', 'hard', 'impossible'].filter(d => progress[d]).length;
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);border-radius:10px;z-index:3;gap:4px;';
-        overlay.innerHTML = `<span style="font-size:1.3rem;">🔒</span><span style="font-family:'Share Tech Mono',monospace;font-size:0.42rem;color:var(--text);">Win vs. all 4 difficulties</span><span style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--accent);">${beatenCount}/4 beaten</span>`;
-        div.appendChild(overlay);
+        // Small badge instead of a full dark overlay — the portrait's color-fill
+        // is now the primary progress signal, this is just a clear numeric readout.
+        const badge = document.createElement('div');
+        badge.style.cssText = 'position:absolute;top:4px;right:4px;display:flex;align-items:center;gap:2px;background:rgba(0,0,0,0.65);border-radius:5px;padding:2px 6px;font-family:\'Share Tech Mono\',monospace;font-size:0.5rem;color:var(--accent);z-index:3;';
+        badge.innerHTML = `🔒 ${beatenCount}/4`;
+        div.appendChild(badge);
         div.addEventListener('click', () => openBestiary(char.id));
     }
     return div;
@@ -405,8 +429,10 @@ function showCharSelect() {
         body.classList.remove('portrait-mode');
     }
 
-    BB_Audio.init();
-    BB_Audio.returnToSelect();
+    if (typeof BB_Audio !== 'undefined') {
+        try { BB_Audio.init(); BB_Audio.returnToSelect(); }
+        catch (e) { console.warn('BB_Audio failed, continuing without it:', e); }
+    }
     _selectedCharId = null;
     _currentSort = 'faction';
     const creditsEl = document.getElementById('charselect-credits');
@@ -433,7 +459,7 @@ function selectChar(charId) {
     const char = CHARACTER_POOL.find(c => c.id === charId);
 
     // Play first 10 seconds of character theme, muting select screen BGM
-    BB_Audio.previewCharTheme(charId);
+    if (typeof BB_Audio !== 'undefined') { try { BB_Audio.previewCharTheme(charId); } catch (e) { console.warn('BB_Audio.previewCharTheme failed:', e); } }
 
     // Reset all cards, remove any existing overlays
     document.querySelectorAll('#hero-grid [data-char-id], #villain-grid [data-char-id]').forEach(el => {
