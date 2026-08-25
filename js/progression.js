@@ -44,7 +44,7 @@
 
 const CREDITS_KEY = 'bb-credits';
 const OWNED_KEY = 'bb-owned';
-const STARTING_CREDITS = 100;
+const STARTING_CREDITS = 120; // enough for 2 Pulse Phasers ($60 each) if bought outright
 
 // rewards = battleScore × $100 × multiplier — Hard/Impossible pay more for the
 // same performance since they're meaningfully harder to win against.
@@ -135,31 +135,19 @@ function isOwned(itemId) {
  * Buys one additional copy of an item. Owning multiple copies is what allows
  * equipping the same weapon into both hand slots (or both arm slots).
  *
- * A brand-new account (owns literally nothing) can buy any WEAPON freely, but
- * armor/gear is locked until at least one weapon is owned — this is the
- * intended onboarding path (arm yourself first), without pinning new players
- * to one specific gun. At $50 each, two M9s = exactly $100, a full dual-wield
- * loadout for Pistol Pete or Cowboy Clint, but any other weapon they can
- * afford works just as well to satisfy this gate.
- * @param {string} itemId
- * @returns {{ ok: boolean, reason?: string }}
- */
-/**
- * Buys one additional copy of an item. Owning multiple copies is what allows
- * equipping the same weapon into both hand slots (or both arm slots).
- *
- * Weapon purchases are locked to a "shopping-for" character — normally
- * whichever character is CURRENTLY SELECTED (_selectedCharId), but the
- * Bestiary can override this to a LOCKED character via _shopTargetCharId
- * (see char-select.js shopForLockedChar()), since you can only ever *select*
- * already-unlocked characters — without that override, any subtype not
- * covered by a starter character could never be purchased by anyone, and
- * every character needing it would be permanently soft-locked. Each of the
- * 16 characters has a designated weapon subtype (CHARACTER_DESIGNATED_SUBTYPE
- * in data.js) and can only buy weapons of that subtype. If no character
- * context exists at all, purchases aren't subtype-restricted. Armor/gear is
- * locked until at least one weapon is owned — the original onboarding gate,
- * unchanged.
+ * Both weapons AND gear are now character-locked (see data.js
+ * CHARACTER_UNLOCK_REQUIREMENTS + GEAR_ITEM_OWNERS):
+ *   - Weapons: purchasable if their subtype appears anywhere in the shopping-for
+ *     character's weaponGroups (getAllowedPurchaseSubtypes).
+ *   - Gear: purchasable if the shopping-for character's id is in that specific
+ *     item's owner list (getGearItemOwners) — items can belong to more than
+ *     one character (e.g. Shades → Hank AND Ace), not strictly one each.
+ *   - Healing items are exempt from the lock entirely — any character can buy any of them.
+ * "Shopping for" is normally whichever character is CURRENTLY SELECTED
+ * (_selectedCharId), but the Bestiary can override this to a LOCKED character
+ * via _shopTargetCharId (see char-select.js shopForLockedChar()), since you can
+ * only ever *select* already-unlocked characters — without that override, any
+ * item exclusive to a still-locked character could never be bought by anyone.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string }}
  */
@@ -167,18 +155,28 @@ function buyItem(itemId) {
   const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'Unknown item.' };
 
-  if (item.type === 'weapon') {
+  if (typeof isUniversalItem === 'function' && isUniversalItem(itemId)) {
+    // Healing items — no character lock at all.
+  } else {
     const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
       || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
     const shoppingForChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
       ? CHARACTER_POOL.find(c => c.id === shoppingForId)
       : null;
-    const designated = shoppingForChar ? getDesignatedSubtype(shoppingForChar.id) : null;
-    if (designated && designated !== 'any' && item.subtype !== designated) {
-      return { ok: false, reason: `${shoppingForChar.name} can only buy ${designated.replace('_', ' ')} weapons.` };
+    if (shoppingForChar) {
+      if (item.type === 'weapon') {
+        const allowed = (typeof getAllowedPurchaseSubtypes === 'function') ? getAllowedPurchaseSubtypes(shoppingForChar.id) : [];
+        if (allowed.length && !allowed.includes(item.subtype)) {
+          const label = allowed.map(s => s.replace('_', ' ')).join(' or ');
+          return { ok: false, reason: `${shoppingForChar.name} can only buy ${label} weapons.` };
+        }
+      } else {
+        const owners = (typeof getGearItemOwners === 'function') ? getGearItemOwners(itemId) : null;
+        if (owners && !owners.includes(shoppingForChar.id)) {
+          return { ok: false, reason: `${item.name} isn't ${shoppingForChar.name}'s gear.` };
+        }
+      }
     }
-  } else if (!hasAnyOwnedItems()) {
-    return { ok: false, reason: 'Buy a weapon first — armor and gear unlock after your first purchase.' };
   }
 
   const bal = getCredits();
@@ -223,8 +221,8 @@ function sellItem(itemId) {
       const selectedChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
         ? CHARACTER_POOL.find(c => c.id === shoppingForId)
         : null;
-      const designated = selectedChar ? getDesignatedSubtype(selectedChar.id) : null;
-      const candidatePool = (designated && designated !== 'any') ? WEAPON_POOL.filter(w => w.subtype === designated) : WEAPON_POOL;
+      const designated = selectedChar ? (typeof getAllowedPurchaseSubtypes === 'function' ? getAllowedPurchaseSubtypes(selectedChar.id) : []) : [];
+      const candidatePool = designated.length ? WEAPON_POOL.filter(w => designated.includes(w.subtype)) : WEAPON_POOL;
       const cheapestReplacement = candidatePool.length
         ? candidatePool.reduce((min, w) => (w.price < min.price ? w : min), candidatePool[0])
         : null;
@@ -338,23 +336,29 @@ function getDefeatProgress(charId) {
  * @returns {boolean}
  */
 /**
- * A locked character unlocks once BOTH are true:
- *   1. You've won against them, as the bot opponent, on all 4 difficulties.
- *   2. You own at least one weapon of their designated subtype (see
- *      CHARACTER_DESIGNATED_SUBTYPE in data.js) — proving you're actually
- *      equipped to play them, not just that you've beaten them somewhere.
- *      Firearms specialists (designated subtype 'any' — Tracy Guns, The
- *      Shadow) need one weapon of EVERY subtype instead of just one.
+ * A locked character unlocks once ALL of these are true, per their unlock
+ * requirement (see getUnlockRequirement() in data.js):
+ *   1. You've won against them, as the bot opponent, on every difficulty
+ *      their requirement lists (not necessarily all 4 — e.g. Clint just needs Easy).
+ *   2. You own at least one weapon from EVERY weaponGroup they list — a group
+ *      with multiple subtypes is satisfied by owning ANY one of them (e.g.
+ *      Macy's ['pistol','melee'] group needs just a pistol OR a melee weapon),
+ *      while separate groups are ALL required (e.g. Titan needs a revolver
+ *      AND separately an explosive).
+ *   3. You own every specific gear item in their gearItems list.
+ *   4. If requiresAnyHealing is set (Macy only), you own at least one of the
+ *      universal healing items.
  */
 function isCharUnlocked(charId) {
   if (typeof STARTER_UNLOCKED_IDS !== 'undefined' && STARTER_UNLOCKED_IDS.includes(charId)) return true;
+  const req = (typeof getUnlockRequirement === 'function') ? getUnlockRequirement(charId) : null;
+  if (!req) return false;
   const progress = getDefeatProgress(charId);
-  const defeatedAll = DIFFICULTY_LEVELS.every(d => progress[d]);
-  if (!defeatedAll) return false;
-  const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
-  if (!designated) return true; // no subtype assigned — defeat requirement alone is enough
-  if (designated === 'any') return _ownsAllSubtypes();
-  return _ownsAnyOfSubtype(designated);
+  if (!req.difficulties.every(d => progress[d])) return false;
+  if (!req.weaponGroups.every(group => group.some(sub => _ownsAnyOfSubtype(sub)))) return false;
+  if (!req.gearItems.every(itemId => _ownsItem(itemId))) return false;
+  if (req.requiresAnyHealing && !_ownsAnyHealingItem()) return false;
+  return true;
 }
 
 /** True if the player owns at least one unit of any weapon with the given subtype. */
@@ -362,6 +366,19 @@ function _ownsAnyOfSubtype(subtype) {
   if (typeof WEAPON_POOL === 'undefined') return true;
   const map = _loadOwned();
   return WEAPON_POOL.some(w => w.subtype === subtype && (map[w.id] || 0) > 0);
+}
+
+/** True if the player owns at least one unit of a specific item id. */
+function _ownsItem(itemId) {
+  const map = _loadOwned();
+  return (map[itemId] || 0) > 0;
+}
+
+/** True if the player owns at least one of the universal healing items. */
+function _ownsAnyHealingItem() {
+  if (typeof HEALING_ITEM_IDS === 'undefined') return true;
+  const map = _loadOwned();
+  return HEALING_ITEM_IDS.some(id => (map[id] || 0) > 0);
 }
 
 /** True if the player owns at least one weapon of EVERY real subtype (for 'any' characters). */

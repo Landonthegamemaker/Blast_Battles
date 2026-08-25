@@ -26,9 +26,9 @@ function openShop() {
   const banner = document.getElementById('shop-target-banner');
   const shoppingFor = _currentShopChar();
   if (shoppingFor && typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId) {
-    const sub = getDesignatedSubtype(shoppingFor.id);
+    const subs = (typeof getAllowedPurchaseSubtypes === 'function' ? getAllowedPurchaseSubtypes(shoppingFor.id) : []);
     banner.style.display = '';
-    banner.innerHTML = `🎯 Shopping for <b>${shoppingFor.name}</b> (locked) — ${sub ? sub.replace('_', ' ') : ''} weapons only`;
+    banner.innerHTML = `🎯 Shopping for <b>${shoppingFor.name}</b> (locked) — ${subs.length ? subs.map(s => s.replace('_', ' ')).join('/') : 'any'} weapons, plus their own gear`;
   } else {
     banner.style.display = 'none';
   }
@@ -128,13 +128,23 @@ function _renderShopGrid() {
     const qty = getOwnedQuantity(item.id);
     const owned = qty > 0;
     const sellValue = Math.floor(item.price * 0.5);
-    const designated = shoppingFor ? getDesignatedSubtype(shoppingFor.id) : null;
-    const wrongSubtype = item.type === 'weapon' && designated && designated !== 'any' && item.subtype !== designated;
-    const onboardingLocked = item.type !== 'weapon' && !hasAnyOwnedItems();
-    const locked = wrongSubtype || onboardingLocked;
-    const lockLabel = wrongSubtype
-      ? `🔒 ${shoppingFor.name} buys ${designated.replace('_', ' ')} only`
-      : onboardingLocked ? '🔒 Buy a weapon first' : '';
+    const isUniversal = typeof isUniversalItem === 'function' && isUniversalItem(item.id);
+    let locked = false, lockLabel = '';
+    if (!isUniversal && shoppingFor) {
+      if (item.type === 'weapon') {
+        const allowed = (typeof getAllowedPurchaseSubtypes === 'function') ? getAllowedPurchaseSubtypes(shoppingFor.id) : [];
+        if (allowed.length && !allowed.includes(item.subtype)) {
+          locked = true;
+          lockLabel = `🔒 ${shoppingFor.name} buys ${allowed.map(s => s.replace('_', ' ')).join('/')} only`;
+        }
+      } else {
+        const owners = (typeof getGearItemOwners === 'function') ? getGearItemOwners(item.id) : null;
+        if (owners && !owners.includes(shoppingFor.id)) {
+          locked = true;
+          lockLabel = `🔒 Not ${shoppingFor.name}'s gear`;
+        }
+      }
+    }
     const card = document.createElement('div');
     card.className = 'shop-card' + (owned ? ' owned' : '') + (locked ? ' locked-item' : '');
     card.innerHTML = `

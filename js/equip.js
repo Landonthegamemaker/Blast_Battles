@@ -113,8 +113,11 @@ function _armorSlotsFilledCount(excludeSlot = null) {
 function _isDefenseItemBlocked(char, item) {
   if (item.type !== 'defense') return false;
   if (!char) return false;
-  if (char.attribute === 'extra_carry') return true; // Tracy: weapons only, no exceptions
-  if (char.attribute === 'dual_wield' && item.healAmount === 0) return true; // Pete: no armor, healing OK
+  if (typeof isUniversalItem === 'function' && isUniversalItem(item.id)) return false;
+  const owners = (typeof getGearItemOwners === 'function') ? getGearItemOwners(item.id) : null;
+  if (owners) return !owners.includes(char.id); // exclusive gear — block for anyone not in the owner list
+  if (char.attribute === 'extra_carry') return true; // Tracy: weapons + her own gear only
+  if (char.attribute === 'dual_wield' && item.healAmount === 0) return true; // Pete: no other armor, healing OK
   return false;
 }
 
@@ -122,18 +125,17 @@ function _isDefenseItemBlocked(char, item) {
  * True if a weapon-type item is off-limits for this character. Checks both:
  *   - the legacy hard equip restriction (WEAPON_ATTRIBUTE_RESTRICTIONS, 4 characters,
  *     e.g. Pete allows pistol OR revolver)
- *   - the newer designated-subtype system (all 16 characters, exactly one subtype each)
- * The designated subtype is the one that actually matters going forward, since
- * buyItem() only lets you acquire weapons of your designated subtype in the first
- * place — this just makes sure the Equip picker can't offer anything you could
- * never have bought (e.g. a revolver someone owned before this system existed).
+ *   - the newer weapon-groups system (all 16 characters, via getAllowedPurchaseSubtypes)
+ * The weapon-groups list is the one that actually matters going forward, since
+ * buyItem() only lets you acquire weapons whose subtype appears in it — this just
+ * makes sure the Equip picker can't offer anything you could never have bought.
  */
 function _isWeaponItemBlocked(char, item) {
   if (item.type !== 'weapon' || !char) return false;
   const allowed = getAllowedWeaponSubtypes(char.attribute);
   if (allowed && !allowed.includes(item.subtype)) return true;
-  const designated = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(char.id) : null;
-  if (designated && designated !== 'any' && item.subtype !== designated) return true;
+  const purchasable = (typeof getAllowedPurchaseSubtypes === 'function') ? getAllowedPurchaseSubtypes(char.id) : [];
+  if (purchasable.length && !purchasable.includes(item.subtype)) return true;
   return false;
 }
 

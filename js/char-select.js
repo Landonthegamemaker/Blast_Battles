@@ -271,12 +271,13 @@ function openBestiary(charId) {
     if (!char) return;
     const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(charId) : {};
     const glowColor = char.faction === 'hero' ? 'var(--hero)' : 'var(--villain)';
-    const subtype = (typeof getDesignatedSubtype === 'function') ? getDesignatedSubtype(charId) : null;
-    const isAnyGun = subtype === 'any';
-    const subtypeLabel = subtype ? subtype.replace('_', ' ') : 'unassigned';
+    const req = (typeof getUnlockRequirement === 'function') ? getUnlockRequirement(charId) : { difficulties: ['easy', 'medium', 'hard', 'impossible'], weaponGroups: [], gearItems: [], requiresAnyHealing: false };
 
+    // Only show rows for the difficulties this character's unlock actually requires
+    // — most need all 4, but some (e.g. Cowboy Clint) only need Easy.
     let rows = '';
     for (const diff of ['easy', 'medium', 'hard', 'impossible']) {
+        if (!req.difficulties.includes(diff)) continue;
         const beaten = !!progress[diff];
         rows += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:5px;${beaten ? 'background:rgba(68,255,136,0.06);' : ''}">
       <span style="font-size:0.7rem;">${DIFFICULTY_LABELS[diff]}</span>
@@ -284,34 +285,47 @@ function openBestiary(charId) {
     </div>`;
     }
 
-    let gearSection;
-    if (isAnyGun) {
-        // Firearms specialist — needs one weapon of EVERY subtype, shown as a checklist.
-        const subtypeRows = ALL_WEAPON_SUBTYPES.map(sub => {
-            const owns = typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(sub) : false;
-            const label = sub.replace('_', ' ');
-            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
-        <span style="font-size:0.62rem;text-transform:capitalize;">${label}</span>
-        <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
-      </div>`;
-        }).join('');
-        const allOwned = ALL_WEAPON_SUBTYPES.every(sub => _ownsAnyOfSubtype(sub));
-        gearSection = `
-      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning at least one weapon of <b>every</b> subtype (firearms specialist).</div>
-      ${subtypeRows}
-      ${!allOwned ? `<button class="btn primary" style="width:100%;margin:8px 0 10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop (any subtype)</button>` : ''}
-    `;
-    } else {
-        const owns = subtype && typeof _ownsAnyOfSubtype === 'function' ? _ownsAnyOfSubtype(subtype) : false;
-        gearSection = `
-      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on every difficulty, AND owning a ${subtypeLabel} weapon.</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px;background:${owns ? 'rgba(68,255,136,0.06)' : 'rgba(232,184,75,0.06)'};">
-        <span style="font-size:0.7rem;">🔫 Own a ${subtypeLabel} weapon</span>
-        <span style="font-size:0.7rem;color:${owns ? 'var(--green)' : 'var(--accent)'};">${owns ? '✓ OWNED' : 'NOT YET'}</span>
-      </div>
-      ${!owns && subtype ? `<button class="btn primary" style="width:100%;margin-bottom:10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop for ${subtypeLabel}</button>` : ''}
-    `;
-    }
+    // Weapon groups — each group is satisfied by owning ANY ONE subtype within it
+    // (an OR-group), but every group listed must be satisfied (AND between groups).
+    const weaponRows = req.weaponGroups.map(group => {
+        const owns = group.some(sub => _ownsAnyOfSubtype(sub));
+        const label = group.map(s => s.replace('_', ' ')).join(' or ');
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
+      <span style="font-size:0.62rem;text-transform:capitalize;">${label}</span>
+      <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
+    </div>`;
+    }).join('');
+
+    // Specific gear items — every one listed must be individually owned.
+    const gearRows = req.gearItems.map(itemId => {
+        const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
+        if (!item) return '';
+        const owns = typeof _ownsItem === 'function' ? _ownsItem(itemId) : false;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
+      <span style="font-size:0.62rem;">${item.icon} ${item.name}</span>
+      <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
+    </div>`;
+    }).join('');
+
+    const healingRow = req.requiresAnyHealing ? (() => {
+        const owns = typeof _ownsAnyHealingItem === 'function' ? _ownsAnyHealingItem() : false;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
+      <span style="font-size:0.62rem;">💊 Any healing item</span>
+      <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
+    </div>`;
+    })() : '';
+
+    const allSatisfied = req.weaponGroups.every(g => g.some(sub => _ownsAnyOfSubtype(sub)))
+        && req.gearItems.every(id => _ownsItem(id))
+        && (!req.requiresAnyHealing || _ownsAnyHealingItem());
+    const diffLabel = req.difficulties.length === 4 ? 'every difficulty' : req.difficulties.map(d => d[0].toUpperCase() + d.slice(1)).join('/');
+    const gearSection = `
+    <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on ${diffLabel}, plus the gear/weapons below.</div>
+    ${weaponRows}
+    ${gearRows}
+    ${healingRow}
+    ${!allSatisfied ? `<button class="btn primary" style="width:100%;margin:8px 0 10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop</button>` : ''}
+  `;
 
     document.getElementById('bestiary-body').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">

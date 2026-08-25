@@ -96,18 +96,13 @@ const WEAPON_POOL_BASE = [
   // Laser Cannon → missile (heavy single-charge weapon), Marksman/Sniper Rifle → sniper.
   // 1-star
   { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 12, ammo: 8, speed: 'fast', range: 2, icon: '🔫', slot: 'hand' },
-  { id: 'w32', name: 'Simple Striker', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 28, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w34', name: 'One Shot Wonder', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 1, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w35', name: 'Clover Charm', type: 'weapon', subtype: 'pistol', damage: 24, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
   // 2-star
-  { id: 'w36', name: 'Fast Fire', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 6, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w37', name: 'Zig Zag', type: 'weapon', subtype: 'smg', damage: 32, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w38', name: 'Pulse Twins', type: 'weapon', subtype: 'pistol', damage: 16, ammo: 6, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w39', name: 'Even Steven', type: 'weapon', subtype: 'shotgun', damage: 32, ammo: 2, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
   { id: 'w40', name: 'Rattler Ranger', type: 'weapon', subtype: 'revolver', damage: 40, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   // 3-star
-  { id: 'w41', name: 'Odd Todd', type: 'weapon', subtype: 'pistol', damage: 24, ammo: 7, speed: 'fast', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w42', name: 'Zap Cannon', type: 'weapon', subtype: 'assault_rifle', damage: 24, ammo: 4, speed: 'medium', range: 2, icon: '🎯', slot: 'hand' },
   { id: 'w43', name: 'Triple Threat', type: 'weapon', subtype: 'shotgun', damage: 48, ammo: 3, speed: 'slow', range: 1, icon: '🪃', slot: 'hand' },
   { id: 'w44', name: 'Magnificent Six', type: 'weapon', subtype: 'revolver', damage: 48, ammo: 6, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
@@ -151,37 +146,23 @@ const DEFENSE_POOL_BASE = [
   // Helmets → HEAD
   { id: 'd5', name: 'Combat Helmet', type: 'defense', subtype: 'helmet', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
   { id: 'd6', name: 'Ballistic Helm', type: 'defense', subtype: 'helmet', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
-  { id: 'd7', name: 'Full Face Guard', type: 'defense', subtype: 'helmet', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
-  { id: 'd8', name: 'Exo Helm', type: 'defense', subtype: 'helmet', defense: 65, durability: 2, maxDurability: 2, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
   // Blast Armor → CHEST
   { id: 'd9', name: 'Blast Suit', type: 'defense', subtype: 'blast_armor', defense: 60, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🦺', slot: 'chest' },
-  { id: 'd10', name: 'EOD Gear', type: 'defense', subtype: 'blast_armor', defense: 70, durability: 2, maxDurability: 2, effectiveVs: ['explosive'], healAmount: 0, icon: '🦺', slot: 'chest' },
-  { id: 'd11', name: 'Blast Plate', type: 'defense', subtype: 'blast_armor', defense: 50, durability: 4, maxDurability: 4, effectiveVs: ['explosive'], healAmount: 0, icon: '🦺', slot: 'chest' },
-  { id: 'd12', name: 'Demo Shield', type: 'defense', subtype: 'blast_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🦺', slot: 'chest' },
   // Plate Armor → CHEST
-  { id: 'd13', name: 'Steel Plate', type: 'defense', subtype: 'plate_armor', defense: 30, durability: 5, maxDurability: 5, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
   { id: 'd14', name: 'Titanium Plate', type: 'defense', subtype: 'plate_armor', defense: 40, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
-  { id: 'd15', name: 'Dragon Scale', type: 'defense', subtype: 'plate_armor', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🔰', slot: 'chest' },
   // Riot Shield — held, not worn → HAND
   { id: 'd16', name: 'Riot Shield', type: 'defense', subtype: 'plate_armor', defense: 35, durability: 6, maxDurability: 6, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🔰', slot: 'hand' },
   // Melee-specific armor → CHEST
-  { id: 'd17', name: 'Chain Mail', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest' },
-  { id: 'd18', name: 'Spike Guard', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🔗', slot: 'chest' },
   // Healing items (one-time use, defense: 0) → HAND
   { id: 'd19', name: 'Med Kit', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 50, icon: '🏥', slot: 'hand' },
-  { id: 'd20', name: 'Med Kit II', type: 'defense', subtype: 'medkit', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 40, icon: '🏥', slot: 'hand' },
-  { id: 'd21', name: 'Syringe', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 30, icon: '💉', slot: 'hand' },
   { id: 'd22', name: 'Adrenaline Shot', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 25, icon: '💉', slot: 'hand' },
   { id: 'd23', name: 'Bandages', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 20, icon: '🩹', slot: 'hand' },
-  { id: 'd24', name: 'Field Dressing', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 15, icon: '🩹', slot: 'hand' },
-  { id: 'd25', name: 'Ointment', type: 'defense', subtype: 'ointment', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 12, icon: '🧴', slot: 'hand' },
-  { id: 'd26', name: 'Combat Stim', type: 'defense', subtype: 'syringe', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 35, icon: '💉', slot: 'hand' },
   // More armors → CHEST
-  { id: 'd27', name: 'Exo Suit', type: 'defense', subtype: 'plate_armor', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🤖', slot: 'chest' },
   // Energy Shield — held, not worn → HAND
   { id: 'd28', name: 'Energy Shield', type: 'defense', subtype: 'plate_armor', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🔵', slot: 'hand' },
-  { id: 'd29', name: 'Ceramic Plate', type: 'defense', subtype: 'vest', defense: 38, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
-  { id: 'd30', name: 'Carbon Weave', type: 'defense', subtype: 'blast_armor', defense: 42, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🦺', slot: 'chest' },
+  // New, added for the character-locked gear system
+  { id: 'd31', name: 'Hazmat Suit', type: 'defense', subtype: 'blast_armor', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '☣️', slot: 'chest' },
+  { id: 'd32', name: 'Pain Killers', type: 'defense', subtype: 'bandage', defense: 0, durability: 1, maxDurability: 1, effectiveVs: [], healAmount: 15, icon: '💊', slot: 'hand' },
 ];
 const DEFENSE_POOL = DEFENSE_POOL_BASE.map(d => ({ ...d, price: d.healAmount > 0 ? d.healAmount * 3 : d.defense * d.durability }));
 
@@ -190,24 +171,29 @@ const DEFENSE_POOL = DEFENSE_POOL_BASE.map(d => ({ ...d, price: d.healAmount > 0
 // resolution logic in combat.js (applyPlayerArmor/applyBotArmor) with zero extra code.
 const GEAR_POOL_BASE = [
   // Head — helmets live in DEFENSE_POOL; these are the other head slot options
-  { id: 'g1', name: 'Hard Hat', type: 'defense', subtype: 'gear_head', defense: 25, durability: 4, maxDurability: 4, effectiveVs: ['melee'], healAmount: 0, icon: '⛑️', slot: 'head' },
-  { id: 'g2', name: 'Face Mask', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['pistol'], healAmount: 0, icon: '😷', slot: 'head' },
   { id: 'g3', name: 'Gas Mask', type: 'defense', subtype: 'gear_head', defense: 30, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🥽', slot: 'head' },
   { id: 'g4', name: 'Night Vision Goggles', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head', nightVision: true },
   // Chest — Jacket (carries extra items: +1 max hand size, see getMaxHandSize)
-  { id: 'g5', name: 'Field Jacket', type: 'defense', subtype: 'gear_chest', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest', carryBonus: 1 },
   // Legs
-  { id: 'g6', name: 'Cargo Pants', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '👖', slot: 'legs' },
-  { id: 'g7', name: 'Padded Leggings', type: 'defense', subtype: 'gear_legs', defense: 25, durability: 3, maxDurability: 3, effectiveVs: ['explosive'], healAmount: 0, icon: '🩳', slot: 'legs' },
-  { id: 'g8', name: 'Battle Pants', type: 'defense', subtype: 'gear_legs', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '👖', slot: 'legs' },
   // Feet
   { id: 'g9', name: 'Sneakers', type: 'defense', subtype: 'gear_feet', defense: 8, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '👟', slot: 'feet' },
   { id: 'g10', name: 'Combat Boots', type: 'defense', subtype: 'gear_feet', defense: 20, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '🥾', slot: 'feet' },
   { id: 'g11', name: 'Steel-Toe Boots', type: 'defense', subtype: 'gear_feet', defense: 28, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'explosive'], healAmount: 0, icon: '🥾', slot: 'feet' },
   // Arms (worn — separate from the flexible hand slots)
-  { id: 'g12', name: 'Elbow Pads', type: 'defense', subtype: 'gear_arm', defense: 12, durability: 3, maxDurability: 3, effectiveVs: ['melee'], healAmount: 0, icon: '💪', slot: 'arm' },
-  { id: 'g13', name: 'Tactical Sleeves', type: 'defense', subtype: 'gear_arm', defense: 18, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle'], healAmount: 0, icon: '💪', slot: 'arm' },
-  { id: 'g14', name: 'Gauntlets', type: 'defense', subtype: 'gear_arm', defense: 26, durability: 4, maxDurability: 4, effectiveVs: ['melee', 'shotgun'], healAmount: 0, icon: '🧤', slot: 'arm' },
+  // New, added for the character-locked gear system
+  { id: 'g15', name: 'Headband', type: 'defense', subtype: 'gear_head', defense: 10, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🎽', slot: 'head' },
+  { id: 'g16', name: 'Cloak', type: 'defense', subtype: 'gear_chest', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['sniper'], healAmount: 0, icon: '🧥', slot: 'chest' },
+  { id: 'g17', name: 'Cowboy Hat', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🤠', slot: 'head' },
+  { id: 'g18', name: 'Trench Coat', type: 'defense', subtype: 'gear_chest', defense: 25, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest' },
+  { id: 'g19', name: 'Cowboy Boots', type: 'defense', subtype: 'gear_feet', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🥾', slot: 'feet' },
+  { id: 'g20', name: 'Holster', type: 'defense', subtype: 'gear_hand', defense: 5, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🔫', slot: 'hand' },
+  { id: 'g21', name: 'Riot Face Shield', type: 'defense', subtype: 'gear_head', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🪖', slot: 'head' },
+  { id: 'g22', name: 'Jean Jacket', type: 'defense', subtype: 'gear_chest', defense: 20, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest' },
+  { id: 'g23', name: 'Ammo Belt', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🎒', slot: 'legs' },
+  { id: 'g24', name: 'Goggles', type: 'defense', subtype: 'gear_head', defense: 12, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '🥽', slot: 'head' },
+  { id: 'g25', name: 'Radar Remote', type: 'defense', subtype: 'gear_hand', defense: 5, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '📡', slot: 'hand', radarPing: true },
+  { id: 'g26', name: 'Shades', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🕶️', slot: 'head' },
+  { id: 'g27', name: 'Fedora', type: 'defense', subtype: 'gear_head', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🎩', slot: 'head' },
 ];
 const GEAR_POOL = GEAR_POOL_BASE.map(g => ({ ...g, price: g.defense * g.durability }));
 
@@ -239,43 +225,105 @@ function getAllowedWeaponSubtypes(attribute) {
   return WEAPON_ATTRIBUTE_RESTRICTIONS[attribute] || null;
 }
 
-// ── Designated weapon subtype (Shop purchase lock + unlock requirement) ────
-// Every character has exactly one signature subtype — a perfect 8-category,
-// 1-hero/1-villain split across all 16 characters. This is DIFFERENT from
-// WEAPON_ATTRIBUTE_RESTRICTIONS above: that's a hard in-match EQUIP rule for
-// just 4 characters; this applies to all 16 and governs what they can BUY in
-// the Shop, plus is a second requirement (alongside beating them on all 4
-// difficulties) to unlock a locked character. Explosive absorbed Missile —
-// they were similar enough to just be one category, so no weapon has
-// subtype 'missile' anymore (see WEAPON_POOL, all reclassified to 'explosive').
+// ── Character unlock requirements (weapon groups + specific gear) ──────────
+// Each character's requirement has:
+//   - difficulties: which difficulties must be beaten (defaults to all 4)
+//   - weaponGroups: string[][] — an array of OR-groups. The character must own
+//     at least one weapon from EVERY group (groups are ANDed together, options
+//     within a group are ORed) — e.g. Macy's single group ['pistol','melee']
+//     means "own a pistol OR a melee weapon"; Titan's two single-option groups
+//     [['revolver'],['explosive']] means "own a revolver AND an explosive".
+//   - gearItems: string[] — specific item ids that must ALL be owned.
+//   - requiresAnyHealing: true for Macy only — she needs any one of the
+//     universal healing items (see HEALING_ITEM_IDS below), not a specific one.
+// This is the single source of truth for both the unlock check AND the Shop
+// purchase lock — once unlocked, a character can keep buying any subtype that
+// appears anywhere in their own weaponGroups, and any gear item their id is
+// listed as an allowed buyer for (see GEAR_ITEM_OWNERS below).
 const ALL_WEAPON_SUBTYPES = ['pistol', 'revolver', 'shotgun', 'assault_rifle', 'sniper', 'explosive', 'melee', 'smg'];
+const _EVERY_SUBTYPE_SEPARATELY = ALL_WEAPON_SUBTYPES.map(s => [s]); // "one of each type" — Shadow, Tracy
 
-// 'any' is a special value — a firearms specialist who can buy/equip every
-// subtype, not just one. Only Tracy Guns and The Shadow carry it. Unlocking
-// an 'any' character is correspondingly harder: own at least one weapon of
-// EVERY subtype, not just one (see isCharUnlocked() in progression.js).
-const CHARACTER_DESIGNATED_SUBTYPE = {
-  c1: 'pistol',         // Pistol Pete
-  c2: 'shotgun',        // Iron Titan
-  c3: 'melee',          // Lunging Logan
-  c4: 'melee',          // Macy the Medic
-  c5: 'smg',            // Toxic Trooper
-  c6: 'smg',            // Sprinting Sue
-  c7: 'sniper',         // Commando Cole
-  c8: 'any',            // The Shadow — firearms specialist, mirrors Tracy's rule
-  c9: 'revolver',       // Cowboy Clint
-  c10: 'shotgun',       // Sentinel Sam
-  c11: 'any',           // Tracy Guns — firearms specialist, "any gun"
-  c12: 'sniper',        // Huntress Hellena
-  c13: 'pistol',        // Tactical Tim
-  c14: 'assault_rifle', // Ranger Kate — her rifle_specialist damage bonus also covers sniper (see combat.js)
-  c15: 'explosive',     // Hank the Tank
-  c16: 'revolver',      // Agent Ace
+const CHARACTER_UNLOCK_REQUIREMENTS = {
+  c1: { weaponGroups: [['pistol']], gearItems: ['g9'] }, // Pistol Pete — starter, no difficulty gate; sneakers
+  c2: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['revolver'], ['explosive']], gearItems: ['d5', 'd14', 'g11', 'd28'] }, // Iron Titan — 6 items is heaviest of any regular character, dropping Impossible to balance total burden
+  c3: { weaponGroups: [['melee']], gearItems: [] }, // Lunging Logan — weapon only, no gear
+  c4: { weaponGroups: [['pistol', 'melee']], gearItems: ['d5'], requiresAnyHealing: true }, // Macy the Medic
+  c5: { weaponGroups: [['explosive']], gearItems: ['d5', 'g3', 'd31'] }, // Toxic Trooper (d31 = new Hazmat Suit)
+  c6: { weaponGroups: [['smg', 'melee']], gearItems: ['g9', 'g15'] }, // Sprinting Sue (g15 = new Headband)
+  c7: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['smg'], ['assault_rifle']], gearItems: ['g4', 'd6'] }, // Commando Cole — no Impossible needed
+  c8: { weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g16'] }, // The Shadow (g16 = new Cloak)
+  c9: { difficulties: ['easy'], weaponGroups: [['revolver']], gearItems: ['g17', 'g18', 'g19', 'g20'] }, // Cowboy Clint — tutorial unlock, Easy only
+  c10: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['shotgun'], ['explosive']], gearItems: ['g21', 'd3', 'd16'] }, // Sentinel Sam (g21 = new Riot Face Shield)
+  c11: { weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g22', 'g23'] }, // Tracy Guns (new: jean jacket/ammo belt)
+  c12: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['sniper'], ['shotgun'], ['melee']], gearItems: ['d4', 'g24'] }, // Huntress Hellena (g24 = new Goggles)
+  c13: { weaponGroups: [['pistol'], ['smg']], gearItems: ['g25', 'd2'] }, // Tactical Tim (g25 = new Radar Remote)
+  c14: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['assault_rifle'], ['sniper']], gearItems: ['d5', 'd2', 'g10'] }, // Ranger Kate
+  c15: { weaponGroups: [['explosive'], ['smg']], gearItems: ['g26', 'd9'] }, // Hank the Tank (g26 = new Shades)
+  c16: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['pistol'], ['revolver']], gearItems: ['g26', 'g27', 'd1'] }, // Agent Ace (g27 = new Fedora)
 };
-/** Returns the designated weapon subtype for a character id ('any' for firearms
- *  specialists), or null if unassigned. */
-function getDesignatedSubtype(charId) {
-  return CHARACTER_DESIGNATED_SUBTYPE[charId] || null;
+
+/** Returns { difficulties, weaponGroups, gearItems, requiresAnyHealing } for a character. */
+function getUnlockRequirement(charId) {
+  const req = CHARACTER_UNLOCK_REQUIREMENTS[charId] || { weaponGroups: [], gearItems: [] };
+  return {
+    difficulties: req.difficulties || ['easy', 'medium', 'hard', 'impossible'],
+    weaponGroups: req.weaponGroups || [],
+    gearItems: req.gearItems || [],
+    requiresAnyHealing: !!req.requiresAnyHealing,
+  };
+}
+
+/** Every weapon subtype a character is allowed to keep buying, once unlocked —
+ *  the flattened union of all their weaponGroups. */
+function getAllowedPurchaseSubtypes(charId) {
+  const req = getUnlockRequirement(charId);
+  const set = new Set();
+  for (const group of req.weaponGroups) for (const sub of group) set.add(sub);
+  return [...set];
+}
+
+// ── Gear item ownership groups ──────────────────────────────────────────────
+// Which character(s) are allowed to buy a given non-universal gear item.
+// Some items belong to more than one character (e.g. Shades → Hank AND Ace,
+// Sneakers → Pete AND Sue, Combat Helmet → four different characters) —
+// exclusivity applies per ITEM-GROUP, not strictly one item per character.
+const GEAR_ITEM_OWNERS = {
+  g9: ['c1', 'c6'],                          // Sneakers — Pete, Sue
+  d5: ['c2', 'c4', 'c5', 'c14'],              // Combat Helmet — Titan, Macy, Toxic, Kate
+  d14: ['c2'],                                // Titanium Plate — Titan
+  g11: ['c2'],                                // Steel-Toe Boots — Titan
+  d28: ['c2'],                                // Energy Shield — Titan
+  g3: ['c5'],                                 // Gas Mask — Toxic
+  d31: ['c5'],                                // Hazmat Suit (new) — Toxic
+  g15: ['c6'],                                // Headband (new) — Sue
+  g4: ['c7'],                                 // Night Vision Goggles — Cole
+  d6: ['c7'],                                 // Ballistic Helm — Cole
+  g16: ['c8'],                                // Cloak (new) — Shadow
+  g17: ['c9'], g18: ['c9'], g19: ['c9'], g20: ['c9'], // Cowboy Hat/Trench Coat/Cowboy Boots/Holster (new) — Clint
+  g21: ['c10'],                               // Riot Face Shield (new) — Sam
+  d3: ['c10'],                                // Riot Vest — Sam
+  d16: ['c10'],                               // Riot Shield — Sam
+  g22: ['c11'], g23: ['c11'],                 // Jean Jacket/Ammo Belt (new) — Tracy
+  d4: ['c12'],                                // Nano Vest — Hellena
+  g24: ['c12'],                               // Goggles (new) — Hellena
+  g25: ['c13'],                               // Radar Remote (new) — Tim
+  d2: ['c13', 'c14'],                         // Tactical Vest — Tim, Kate
+  g10: ['c14'],                               // Combat Boots — Kate
+  g26: ['c15', 'c16'],                        // Shades (new) — Hank, Ace
+  d9: ['c15'],                                // Blast Suit — Hank
+  g27: ['c16'],                               // Fedora (new) — Ace
+  d1: ['c16'],                                // Kevlar Vest — Ace
+};
+/** Returns the list of character ids allowed to buy this gear item, or null if universal. */
+function getGearItemOwners(itemId) {
+  return GEAR_ITEM_OWNERS[itemId] || null;
+}
+
+// Healing items are exempt from the character lock — any character can buy
+// any of these. Macy's unlock requires owning at least one (requiresAnyHealing).
+const HEALING_ITEM_IDS = ['d19', 'd22', 'd23', 'd32']; // Med Kit, Adrenaline Shot, Bandages, Pain Killers (new)
+function isUniversalItem(itemId) {
+  return HEALING_ITEM_IDS.includes(itemId);
 }
 
 // ── Default starter-owned items ─────────────────────────────────────────────
@@ -327,8 +375,8 @@ const LOCATION_POOL = [
   { id: 'l1', name: 'Neutral Zone', effect: 'neutral', effectDesc: ' ', icon: '⬜', css: 'neutral' },
   { id: 'l2', name: 'Hero Sanctum', effect: 'hero_zone', effectDesc: ' +25% hero dmg', icon: '🦸', css: 'hero-zone' },
   { id: 'l3', name: 'Villain Den', effect: 'villain_zone', effectDesc: ' +25% villain dmg', icon: '🦹', css: 'villain-zone' },
-  { id: 'l4', name: 'The Armory', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l5', name: 'The Forge', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l4', name: 'The Armory', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l5', name: 'The Forge', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l6', name: 'Radiation Zone', effect: 'radiation', effectDesc: '-5 HP/phase', icon: '☢️', css: 'danger' },
   { id: 'l7', name: 'Stink Swamp', effect: 'radiation', effectDesc: '-5 HP/phase', icon: '🍄', css: 'danger' },
   { id: 'l8', name: 'Scrap Heap', effect: 'discard', effectDesc: 'Optionally discard 1 card', icon: '🗑️', css: 'neutral' },
@@ -336,8 +384,8 @@ const LOCATION_POOL = [
   { id: 'l10', name: 'Bunker', effect: 'neutral', effectDesc: ' ', icon: '🕳️', css: 'neutral' },
   { id: 'l11', name: 'Crossroads', effect: 'neutral', effectDesc: ' ', icon: '🔀', css: 'neutral' },
   { id: 'l12', name: 'Fire Zone', effect: 'radiation', effectDesc: ' -5 HP/phase', icon: '🔥', css: 'danger' },
-  { id: 'l13', name: 'Supply Depot', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l14', name: 'Medic Post', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l13', name: 'Supply Depot', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l14', name: 'Medic Post', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l15', name: 'Light Room', effect: 'hero_zone', effectDesc: ' +25% hero dmg', icon: '☀️', css: 'hero-zone' },
   { id: 'l16', name: 'Dark Alley', effect: 'villain_zone', effectDesc: ' +25% villain dmg', icon: '🌑', css: 'villain-zone' },
   { id: 'l17', name: 'Ruined City', effect: 'neutral', effectDesc: ' ', icon: '🏚️', css: 'neutral' },
@@ -347,32 +395,32 @@ const LOCATION_POOL = [
   { id: 'l21', name: 'Sniper Nest', effect: 'sniper_nest', effectDesc: 'Snipers +33% dmg', icon: '🎯', css: 'buff' },
   { id: 'l22', name: 'Crash Site', effect: 'neutral', effectDesc: ' ', icon: '💥', css: 'neutral' },
   { id: 'l23', name: 'Watch Tower', effect: 'sniper_nest', effectDesc: 'Snipers +33% dmg', icon: '👀', css: 'buff' },
-  { id: 'l24', name: 'Tech Lab', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l24', name: 'Tech Lab', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   // Dead center of the 7×7 grid (index 24) — the single most fought-over tile.
   // Faction-agnostic +25% damage, unlike hero_zone/villain_zone which only help one side.
   { id: 'l25', name: 'Power Core', effect: 'damage_boost', effectDesc: '+25% dmg (either side)', icon: '💠', css: 'buff' },
   { id: 'l26', name: 'Abandoned Mine', effect: 'neutral', effectDesc: ' ', icon: '⛏️', css: 'neutral' },
   { id: 'l27', name: 'Toxic Swamp', effect: 'radiation', effectDesc: ' -5 HP/phase', icon: '🦠', css: 'danger' },
   { id: 'l28', name: 'Barricade', effect: 'neutral', effectDesc: ' ', icon: '🚧', css: 'neutral' },
-  { id: 'l29', name: 'Armory Vault', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l30', name: 'Medical Bay', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l29', name: 'Armory Vault', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l30', name: 'Medical Bay', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l31', name: 'Hero Hideout', effect: 'hero_zone', effectDesc: ' +25% hero dmg', icon: '🦸‍♂️', css: 'hero-zone' },
   { id: 'l32', name: 'Evil Lair', effect: 'villain_zone', effectDesc: ' +25% villain dmg', icon: '🦹‍♂️', css: 'villain-zone' },
-  { id: 'l33', name: 'Pawn Shop', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l34', name: 'First Aid Tent', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l33', name: 'Pawn Shop', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l34', name: 'First Aid Tent', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l35', name: 'Sunny Meadow', effect: 'hero_zone', effectDesc: ' +25% hero dmg', icon: '🌻', css: 'hero-zone' },
   { id: 'l36', name: 'Shadow Alley', effect: 'villain_zone', effectDesc: ' +25% villain dmg', icon: '🌘', css: 'villain-zone' },
-  { id: 'l37', name: 'Weapon Cache', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l38', name: 'Defense Depot', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l37', name: 'Weapon Cache', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l38', name: 'Defense Depot', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l39', name: 'Radiation Field', effect: 'radiation', effectDesc: '-5 HP/phase', icon: '☢️', css: 'danger' },
   { id: 'l40', name: 'Open Plains', effect: 'neutral', effectDesc: ' ', icon: '🌾', css: 'neutral' },
   { id: 'l41', name: 'Sniper Tower', effect: 'sniper_nest', effectDesc: 'Snipers +33% dmg', icon: '🏹', css: 'buff' },
   { id: 'l42', name: 'Crash Zone', effect: 'neutral', effectDesc: ' ', icon: '💥', css: 'neutral' },
   { id: 'l43', name: 'Observation Deck', effect: 'sniper_nest', effectDesc: 'Snipers +33% dmg', icon: '🔭', css: 'buff' },
-  { id: 'l44', name: 'Research Lab', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
-  { id: 'l45', name: 'Clinic', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l44', name: 'Research Lab', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
+  { id: 'l45', name: 'Clinic', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
   { id: 'l46', name: 'Abandoned Office', effect: 'neutral', effectDesc: ' ', icon: '⬜', css: 'neutral' },
   { id: 'l47', name: 'Nuclear Plant', effect: 'radiation', effectDesc: '-5 HP/phase', icon: '🏭', css: 'danger' },
-  { id: 'l48', name: 'Barricade Zone', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'neutral' },
-  { id: 'l49', name: 'Army Base', effect: 'ammo_refill', effectDesc: '+1 ammo/phase', icon: '🔋', css: 'buff' },
+  { id: 'l48', name: 'Barricade Zone', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'neutral' },
+  { id: 'l49', name: 'Army Base', effect: 'ammo_refill', effectDesc: '+1 ammo/turn', icon: '🔋', css: 'buff' },
 ];
