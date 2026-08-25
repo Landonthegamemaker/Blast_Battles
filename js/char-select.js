@@ -191,9 +191,10 @@ function makeCharCard(char) {
     const glowColor = isHero ? 'var(--hero)' : 'var(--villain)';
     const glowRgb = isHero ? '74,184,255' : '196,75,255';
     const unlocked = (typeof isCharUnlocked === 'function') ? isCharUnlocked(char.id) : true;
-    const progress = (typeof getDefeatProgress === 'function') ? getDefeatProgress(char.id) : {};
-    const beatenCount = ['easy', 'medium', 'hard', 'impossible'].filter(d => progress[d]).length;
-    const progressPct = unlocked ? 100 : (beatenCount / 4) * 100;
+    const prog = (typeof getUnlockProgressCount === 'function') ? getUnlockProgressCount(char.id) : { current: 0, total: 1 };
+    const beatenCount = prog.current;
+    const progressTotal = prog.total || 1;
+    const progressPct = unlocked ? 100 : (beatenCount / progressTotal) * 100;
     const div = document.createElement('div');
     div.dataset.charId = char.id;
     div.style.cssText = 'border-radius:12px;border:1.5px solid ' + glowColor + ';box-shadow:0 0 10px rgba(' + glowRgb + ',0.35);background:rgba(' + glowRgb + ',0.06);padding:0 0 6px 0;cursor:' + (unlocked ? 'pointer' : 'default') + ';transition:all 0.15s;user-select:none;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;text-align:center;height:160px;overflow:hidden;position:relative;';
@@ -243,7 +244,7 @@ function makeCharCard(char) {
         // is now the primary progress signal, this is just a clear numeric readout.
         const badge = document.createElement('div');
         badge.style.cssText = 'position:absolute;top:4px;right:4px;display:flex;align-items:center;gap:2px;background:rgba(0,0,0,0.65);border-radius:5px;padding:2px 6px;font-family:\'Share Tech Mono\',monospace;font-size:0.5rem;color:var(--accent);z-index:3;';
-        badge.innerHTML = `🔒 ${beatenCount}/4`;
+        badge.innerHTML = `🔒 ${beatenCount}/${progressTotal}`;
         div.appendChild(badge);
         div.addEventListener('click', () => openBestiary(char.id));
     }
@@ -318,6 +319,7 @@ function openBestiary(charId) {
     const allSatisfied = req.weaponGroups.every(g => g.some(sub => _ownsAnyOfSubtype(sub)))
         && req.gearItems.every(id => _ownsItem(id))
         && (!req.requiresAnyHealing || _ownsAnyHealingItem());
+    const unlockProg = (typeof getUnlockProgressCount === 'function') ? getUnlockProgressCount(charId) : { current: 0, total: 0 };
     const diffLabel = req.difficulties.length === 4 ? 'every difficulty' : req.difficulties.map(d => d[0].toUpperCase() + d.slice(1)).join('/');
     const gearSection = `
     <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">Unlocks by winning against ${char.name} on ${diffLabel}, plus the gear/weapons below.</div>
@@ -332,7 +334,8 @@ function openBestiary(charId) {
       <span style="font-size:1.4rem;">${char.icon}</span>
       <h2 style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.1rem;color:${glowColor};margin:0;">${char.name}</h2>
     </div>
-    <div style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">${char.faction.toUpperCase()} · LOCKED</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;">${char.faction.toUpperCase()} · LOCKED</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:${allSatisfied ? 'var(--green)' : 'var(--accent)'};margin-bottom:8px;">${unlockProg.current}/${unlockProg.total}</div>
     ${gearSection}
     ${rows}
   `;
@@ -388,10 +391,10 @@ function makeOpponentCard(char) {
     </div>
   `;
     if (!unlocked) {
-        const beatenCount = ['easy', 'medium', 'hard', 'impossible'].filter(d => getDefeatProgress(char.id)[d]).length;
+        const prog = (typeof getUnlockProgressCount === 'function') ? getUnlockProgressCount(char.id) : { current: 0, total: 4 };
         const badge = document.createElement('div');
         badge.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.7);border-radius:4px;padding:1px 5px;font-family:\'Share Tech Mono\',monospace;font-size:0.4rem;color:var(--accent);';
-        badge.textContent = `🔒 ${beatenCount}/4`;
+        badge.textContent = `🔒 ${prog.current}/${prog.total}`;
         div.appendChild(badge);
     }
     div.addEventListener('click', () => selectOpponent(char.id));

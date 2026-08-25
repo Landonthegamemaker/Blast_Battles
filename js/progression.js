@@ -387,6 +387,39 @@ function _ownsAllSubtypes() {
   return ALL_WEAPON_SUBTYPES.every(sub => _ownsAnyOfSubtype(sub));
 }
 
+/**
+ * A single merged X/N unlock-progress count for a character — combines
+ * difficulties beaten, weapon-groups satisfied, specific gear items owned,
+ * and the healing requirement (Macy only) into one number, matching the
+ * "total weight" figure used to balance difficulty requirements against gear
+ * burden (e.g. Lunging Logan is X/5, Tracy Guns is X/14).
+ * @param {string} charId
+ * @returns {{ current: number, total: number }}
+ */
+function getUnlockProgressCount(charId) {
+  const req = (typeof getUnlockRequirement === 'function') ? getUnlockRequirement(charId) : null;
+  if (!req) return { current: 0, total: 0 };
+  const progress = getDefeatProgress(charId);
+  let current = 0;
+  let total = 0;
+
+  total += req.difficulties.length;
+  current += req.difficulties.filter(d => progress[d]).length;
+
+  total += req.weaponGroups.length;
+  current += req.weaponGroups.filter(group => group.some(sub => _ownsAnyOfSubtype(sub))).length;
+
+  total += req.gearItems.length;
+  current += req.gearItems.filter(id => _ownsItem(id)).length;
+
+  if (req.requiresAnyHealing) {
+    total += 1;
+    if (_ownsAnyHealingItem()) current += 1;
+  }
+
+  return { current, total };
+}
+
 /** Debug helper — wipes progression back to defaults. Not wired to any UI button by default. */
 function resetProgression() {
   localStorage.setItem(CREDITS_KEY, String(STARTING_CREDITS));
