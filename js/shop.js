@@ -86,6 +86,16 @@ function confirmResetProgression() {
   resetProgression();
   _setShopMsg('✓ Progress reset.');
   _renderShopGrid();
+  // The dialogue's "seen" flag was just cleared by resetProgression() — close the
+  // shop and show it right away, cleanly, instead of stacking it on top of an
+  // open modal and waiting for the next char-select visit.
+  if (typeof maybeShowTutorial === 'function' && localStorage.getItem('bb-tutorial-seen') === null) {
+    document.getElementById('shop-overlay').classList.add('hidden');
+    document.getElementById('equip-overlay').classList.add('hidden');
+    if (typeof _shopTargetCharId !== 'undefined') _shopTargetCharId = null;
+    maybeShowTutorial();
+    return;
+  }
   // Refresh whichever screen is behind the shop so it reflects the reset immediately.
   const equipOverlay = document.getElementById('equip-overlay');
   const charSelectOverlay = document.getElementById('char-select-overlay');
@@ -96,9 +106,6 @@ function confirmResetProgression() {
     const el = document.getElementById('charselect-credits');
     if (el) el.textContent = `💰 ${getCredits()}`;
   }
-  // The welcome tutorial's "seen" flag was just cleared by resetProgression() —
-  // show it right away instead of waiting for the next char-select visit.
-  if (typeof maybeShowTutorial === 'function') maybeShowTutorial();
 }
 function _currentShopChar() {
   const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)

@@ -378,18 +378,14 @@ function applyLocationEffects(isCardDrawPhase = true) {
     }
   }
 
-  // Ammo Station — refills all owned weapons to full ammo, then the tile is spent
-  // for the rest of the match. Fires immediately (not gated to card-draw phases,
-  // since it's one-time rather than a repeating draw).
-  if (pLoc.effect === 'ammo_refill' && !pLoc.used) {
-    pLoc.used = true;
+  // Ammo Station — every phase you're standing on it, each weapon below max
+  // ammo gains +1 (never disappears, unlike the old one-time full-refill version).
+  if (pLoc.effect === 'ammo_refill') {
     const weapons = [...G.playerHand, ...G.playerInPlay].filter(c => c.type === 'weapon');
     const refillable = weapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
-    for (const c of refillable) c.ammo = c._maxAmmo;
     if (refillable.length > 0) {
-      logMsg('player', `🔋 ${pLoc.name} refills all your weapons to full ammo! (one-time use — now spent)`);
-    } else {
-      logMsg('system', `🔋 ${pLoc.name} triggers, but your ammo was already full. (one-time use — now spent)`);
+      for (const c of refillable) c.ammo = Math.min(c._maxAmmo, c.ammo + 1);
+      logMsg('player', `🔋 ${pLoc.name} tops up your ammo by 1.`);
     }
   }
 
@@ -433,14 +429,13 @@ function applyLocationEffects(isCardDrawPhase = true) {
     logMsg('damage', `☠️ ${G.botChar.name} is off a hazard tile — takes 1 toxic dmg!`);
   }
 
-  // Ammo Station (bot) — same one-time full-ammo refill as the player gets.
-  if (bLoc.effect === 'ammo_refill' && !bLoc.used) {
-    bLoc.used = true;
+  // Ammo Station (bot) — same +1/phase, repeating, as the player gets.
+  if (bLoc.effect === 'ammo_refill') {
     const botWeapons = [...G.botHand, ...G.botInPlay].filter(c => c.type === 'weapon');
     const botRefillable = botWeapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
-    for (const c of botRefillable) c.ammo = c._maxAmmo;
     if (botRefillable.length > 0) {
-      logMsg('bot', `🔋 Bot's weapons refill to full ammo at ${bLoc.name}. (one-time use — now spent)`);
+      for (const c of botRefillable) c.ammo = Math.min(c._maxAmmo, c.ammo + 1);
+      logMsg('bot', `🔋 Bot's weapons top up by 1 at ${bLoc.name}.`);
     }
   }
 

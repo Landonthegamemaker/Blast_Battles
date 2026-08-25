@@ -104,6 +104,14 @@ function initGame() {
   if (botChar.attribute === 'shadow_clone') applyShadowMirror(botChar, playerChar);
   if (playerChar.attribute === 'shadow_clone') applyShadowMirror(playerChar, botChar);
 
+  // Difficulty scales the BOT's starting HP — this replaced the old skip-chance
+  // system entirely (see ai-bot.js): the bot now always acts on its turn, and
+  // difficulty is expressed purely as how much health the opponent starts with.
+  const DIFFICULTY_HP_MULTIPLIER = { easy: 0.5, medium: 1.0, hard: 1.5, impossible: 2.0 };
+  const hpMult = DIFFICULTY_HP_MULTIPLIER[G.difficulty] ?? 1.0;
+  botChar.maxHp = Math.round(botChar.maxHp * hpMult);
+  botChar.hp = botChar.maxHp;
+
   // Starter hand — 1 thematic weapon + 1 defense card (or 2nd weapon for Pete/Tracy)
   function starterDeck(char, wDeck, dDeck) {
     const attr = char.attribute;
@@ -212,6 +220,10 @@ function initGame() {
     turn: 1,
     phase: 0,
     difficulty: G.difficulty || 'medium',
+    // One-shot flag from char-select.js launchCombatTutorial() — marks this as the
+    // scripted Sterling Cross tutorial match, so endGame() can apply the guaranteed
+    // reward + pre-flag Clint's medium/hard/impossible defeat progress on a win.
+    isTutorialMatch: (typeof _tutorialMatchPending !== 'undefined' && _tutorialMatchPending) || false,
     playerChar: deepClone(playerChar),
     botChar: deepClone(botChar),
     playerHand,
@@ -245,6 +257,7 @@ function initGame() {
     lastKillingBlow: null,
     matchStartTime: Date.now(),
   };
+  if (typeof _tutorialMatchPending !== 'undefined') _tutorialMatchPending = false; // one-shot — consumed
 
   logMsg('system', `=== BLAST BATTLES — Turn 1 [${G.difficulty.toUpperCase()}] ===`);
   logMsg('system', `You select: ${G.playerChar.name} (${G.playerChar.faction}) | Bot selects: ${G.botChar.name} (${G.botChar.faction})`);
@@ -621,8 +634,7 @@ function playerPlayCard(card) {
 
     card.ammo--;
     if (card.ammo <= 0) {
-      G.playerInPlay = G.playerInPlay.filter(c => c.id !== card.id);
-      logMsg('system', `${card.name} is out of ammo and discarded.`);
+      logMsg('system', `${card.name} is out of ammo — find an Ammo Station to refill it.`);
     }
 
     // Dual Wield: track first shot; return early if partner card still unfired

@@ -244,7 +244,6 @@ function impossibleBotPlayPhase() {
                         logMsg('bot', `🤖 AI fires ${card.name} → ${res.finalDmg} dmg ${rangePct}${res.armorNote}.`);
                     }
                     card.ammo--;
-                    if (card.ammo <= 0) G.botInPlay = G.botInPlay.filter(c => c.id !== card.id);
                 } else if (card.healAmount > 0) {
                     // Only use heal if actually missing HP (not at full health)
                     const missingHp = G.botChar.maxHp - G.botChar.hp;
@@ -301,14 +300,9 @@ function botPlayPhase() {
         return;
     }
 
-    // Difficulty skip rates — easy/medium skip both combat AND movement randomly
-    const skipRates = { easy: 0.75, medium: 0.50, hard: 0.0, impossible: 0.0 };
-    const skipChance = skipRates[G.difficulty] ?? 0.25;
-    if (Math.random() < skipChance) {
-        logMsg('bot', 'Bot passes this phase.');
-        G.botActedThisPhase = true;
-        return;
-    }
+    // Difficulty is now expressed as enemy HP scaling (see initGame() in
+    // game-state.js), not as a chance for the bot to skip its turn — the bot
+    // always acts on its turn if it has a legal action, regardless of difficulty.
     const allBotCards = [...G.botHand, ...G.botInPlay];
     const allBotWeapons = allBotCards.filter(c => c.type === 'weapon');
     const hasHeal = G.botHand.some(c => c.type === 'defense' && c.healAmount > 0);
@@ -380,7 +374,7 @@ function botPlayPhase() {
     // ── Priority 2: offensive pressure — near-kill shot trumps low-HP heal ─────
     if (nearKill && canFire) {
         const scored = validWeapons.map(w => {
-            const rangeMult = getRangeMultiplier(w, dist); // closer = higher mult now (see combat.js)
+            const rangeMult = getRangeMultiplier(w, dist); // full dmg AT max range, weaker up close (see combat.js)
             return { w, ev: Math.round(w.damage * rangeMult) };
         });
         const weapon = scored.reduce((a, b) => a.ev >= b.ev ? a : b).w;
@@ -423,7 +417,7 @@ function botPlayPhase() {
     if (canFire) {
         // Pick weapon with highest expected damage after range multiplier
         const scored = validWeapons.map(w => {
-            const rangeMult = getRangeMultiplier(w, dist); // closer = higher mult now (see combat.js)
+            const rangeMult = getRangeMultiplier(w, dist); // full dmg AT max range, weaker up close (see combat.js)
             return { w, ev: Math.round(w.damage * rangeMult) };
         });
         const weapon = (G.difficulty === 'hard' || isOffensive)
@@ -519,14 +513,24 @@ function botMoveSmart() {
     const currentLoc = G.locations[G.botPos];
     const onHazard = currentLoc.effect === 'radiation';
 
-    // Target range: under the new range-damage curve (133% at point-blank down to
-    // 33% at max range), closing distance is always the higher-damage play — every
-    // archetype wants contact now, not just melee. (Previously this chased max
-    // weapon range, back when farther away used to deal more damage.)
-    const targetRange = 0;
-
     // ── Character archetype for movement decisions ──────────────────────────
     const botAttr = G.botChar.attribute;
+
+    // Target range: under the range-damage formula (full listed damage lands exactly
+    // AT max range, weaker firing closer than that), bots want to sit at their
+    // weapon's max range, not close to contact. Melee (swift_melee) is the one
+    // exception — melee only ever fires at dist 0, so it always wants contact.
+    const playableThisPhase = allBotWeapons.filter(w => isWeaponSpeedReady(w, phase, botAttr) && w.ammo > 0);
+    let targetRange = 0;
+    if (botAttr !== 'swift_melee') {
+        targetRange = 1;
+        if (playableThisPhase.length > 0) {
+            targetRange = Math.max(...playableThisPhase.map(w => w.range));
+        } else if (allBotWeapons.length > 0) {
+            targetRange = Math.max(...allBotWeapons.map(w => w.range));
+        }
+    }
+
     const botIsOffensive = ['dual_wield', 'deadeye', 'pistol_specialist', 'shotgun_specialist', 'rifle_specialist',
         'sniper_specialist', 'explosive_specialist', 'melee_specialist',
         'swift_melee', 'revolver_specialist', 'run_and_gun', 'dodge_bullets'].includes(botAttr);
@@ -565,10 +569,12 @@ function botMoveSmart() {
         // This overrides normal positioning logic; Huntress wants elevation above all else.
         if (botAttr === 'sniper_specialist') {
             if (loc.effect === 'sniper_nest') score += 600;
-            // Range damage now favors point-blank (133%) over max range (33%) — score
-            // toward contact, same as everyone else. The Sniper Nest bonus above is a
-            // separate location buff, not a reason to hang back at range anymore.
-            score += 200 - dist * 80;
+            // Range damage now favors sitting exactly AT max range (100%) over point-blank
+            // (as low as 25% for a range-3 sniper) — score toward her weapon's actual max
+            // range via the shared targetRange, not toward contact. Sniper Nest above is a
+            // separate location buff on top of that, not a substitute for good positioning.
+            const rangeDelta = Math.abs(dist - targetRange);
+            score += 200 - rangeDelta * 80;
             if (isHazardTile(node)) score -= 500;
             if (isCritical) {
                 if (loc.effect === 'heal') score += 800;
@@ -612,9 +618,10 @@ function botMoveSmart() {
             }
         }
 
-        // ── AMMO STATION — prioritize refilling when running low, one-time use ────
+        // ── AMMO STATION — prioritize refilling when running low; no longer
+        // one-time-use, so no "already spent" check needed. ─────────────────
         const hasLowAmmoWeapon = allBotWeapons.some(w => w._maxAmmo !== undefined && w.ammo < w._maxAmmo * 0.5);
-        if (hasLowAmmoWeapon && loc.effect === 'ammo_refill' && !loc.used) score += 350;
+        if (hasLowAmmoWeapon && loc.effect === 'ammo_refill') score += 350;
         // Center Power Core — faction-agnostic damage buff, always worth contesting.
         if (loc.effect === 'damage_boost') score += 250;
 
