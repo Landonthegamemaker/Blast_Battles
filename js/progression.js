@@ -16,8 +16,10 @@
  *   getOwnedQuantity(itemId)         → number (0 if never owned)
  *   isOwned(itemId)                  → boolean (getOwnedQuantity(itemId) > 0)
  *   hasAnyOwnedItems()                → boolean (true once anything at all has been bought)
- *   buyItem(itemId)                  → { ok: boolean, reason?: string } — locked to M9-only
- *                                       until hasAnyOwnedItems() is true (see below)
+ *   buyItem(itemId)                  → { ok: boolean, reason?: string } — weapons locked to the
+ *                                       shopping-for character's designated subtype (data.js);
+ *                                       armor/gear locked until hasAnyOwnedItems() is true
+ *   grantFreeItem(itemId, qty?)      → void — mission-issued gear, bypasses credits/subtype-lock entirely
  *   sellItem(itemId)                 → { ok: boolean, reason?: string, refund?: number }
  *   awardMatchCredits(battleScore, difficulty?, outcome) → number credits awarded
  *                                     (outcome: 'win'|'draw'|'loss'|'retreat' — see function docstring)
@@ -81,6 +83,19 @@ function _loadOwned() {
 
 function _saveOwned(map) {
   localStorage.setItem(OWNED_KEY, JSON.stringify(map));
+}
+
+/**
+ * Grants item ownership WITHOUT touching credits or the subtype-purchase-lock —
+ * for mission-issued/scripted gear (e.g. the Sterling Cross tutorial handing
+ * Pete 2 free Pulse Phasers) rather than a normal Shop purchase.
+ * @param {string} itemId
+ * @param {number} qty
+ */
+function grantFreeItem(itemId, qty = 1) {
+  const map = _loadOwned();
+  map[itemId] = (map[itemId] || 0) + qty;
+  _saveOwned(map);
 }
 
 function getCredits() {
@@ -361,5 +376,8 @@ function resetProgression() {
   _saveOwned(_defaultOwnedMap());
   localStorage.removeItem(DEFEATS_KEY);
   localStorage.removeItem('bb-loadouts');
-  localStorage.removeItem('bb-tutorial-seen'); // replays the welcome tutorial next time char-select shows
+  localStorage.removeItem('bb-tutorial-seen'); // replays the dialogue next time char-select shows
+  localStorage.removeItem('bb-tutorial-match-done'); // without this, replaying the tutorial after
+  // a reset wouldn't re-grant the guaranteed credit top-up or re-pre-flag Clint's higher
+  // difficulties — the one-time gate would still show as already consumed from before.
 }

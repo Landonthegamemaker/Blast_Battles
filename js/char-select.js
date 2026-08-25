@@ -28,22 +28,93 @@
 */
 'use strict';
 
-// ── First-time tutorial ──────────────────────────────────────────────────
-const TUTORIAL_SEEN_KEY = 'bb-tutorial-seen';
+// ── First-time tutorial: Sterling Cross dialogue → scripted Pete vs Clint match ──
+const TUTORIAL_SEEN_KEY = 'bb-tutorial-seen'; // dialogue has been shown at least once
+const TUTORIAL_MATCH_DONE_KEY = 'bb-tutorial-match-done'; // guaranteed reward/pre-flag only fires once
 
-/** Shows the welcome tutorial unconditionally — used by the "show again" link in Help. */
+const STERLING_CROSS_DIALOGUE = [
+    'Welcome to Shadow Squadron, Pete!',
+    "We looked through your record and were very impressed with your shooting abilities on and off the court — your feats with akimbo pistols are legendary!",
+    'That\u2019s why I had my men supply you with state-of-the-art \u201cPulse Phasers.\u201d They shoot lasers instead of standard ballistic rounds, so they travel at the speed of light. Kinda hard to dodge something moving that fast.',
+    'Because they\u2019re experimental, they aren\u2019t perfect. They tend to overheat quickly, like a glue gun — you need to watch how fast you burn through them. Fortunately, my guys have designed charging stations to help you stay afloat.',
+    'It\u2019s time to give those things a test run. I just got word from Agent Ace \u2014 Cowboy Clint has him pinned down. He needs backup, and you\u2019re all we\u2019ve got since the other agents went dark. It\u2019s game time!',
+];
+let _tutorialDialogueIdx = 0;
+let _tutorialMatchPending = false; // one-shot, consumed by initGame() — see game-state.js
+
+/** Shows the Sterling Cross dialogue from the start — used both for the automatic
+ *  first-time trigger and the "show again" link in Help. */
 function showTutorial() {
+    _tutorialDialogueIdx = 0;
+    _renderTutorialLine();
     document.getElementById('tutorial-overlay').classList.remove('hidden');
 }
 
+function _renderTutorialLine() {
+    const isLast = _tutorialDialogueIdx === STERLING_CROSS_DIALOGUE.length - 1;
+    document.getElementById('tutorial-dialogue-text').textContent = STERLING_CROSS_DIALOGUE[_tutorialDialogueIdx];
+    document.getElementById('tutorial-next-btn').textContent = isLast ? '\u2694 BEGIN MISSION' : 'NEXT';
+}
+
+/** Advances to the next dialogue line. On the last line: launches the scripted
+ *  tutorial match the FIRST time only — if the player already completed it
+ *  (TUTORIAL_MATCH_DONE_KEY set), this is just a narrative replay from Help's
+ *  "show tutorial again" link, so it shouldn't re-grant free gear, overwrite
+ *  Pete's current loadout, or force another match on a returning player.
+ *
+ *  TUTORIAL_SEEN_KEY is only set here, at the point the match actually
+ *  launches — NOT on every intermediate line. Since Pete is the only static
+ *  starter now (Clint unlocks through this tutorial), marking it seen too
+ *  early — e.g. if a player closes the tab after the first dialogue line —
+ *  would mean the tutorial never re-triggers next visit, but the match that
+ *  actually unlocks a villain never ran either: a permanent soft-lock with
+ *  no path to ever play as anyone but Pete. */
+function advanceTutorialDialogue() {
+    const isLast = _tutorialDialogueIdx === STERLING_CROSS_DIALOGUE.length - 1;
+    if (isLast) {
+        localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+        document.getElementById('tutorial-overlay').classList.add('hidden');
+        if (!localStorage.getItem(TUTORIAL_MATCH_DONE_KEY)) launchCombatTutorial();
+        return;
+    }
+    _tutorialDialogueIdx++;
+    _renderTutorialLine();
+}
+
+/** Closes the dialogue without launching the match. Deliberately does NOT mark
+ *  TUTORIAL_SEEN_KEY — see the note on advanceTutorialDialogue() for why: doing
+ *  so here would risk the same soft-lock (dialogue never shown again, but the
+ *  match that actually unlocks a villain never ran). Not currently wired to
+ *  any UI element — kept for future use (e.g. an outside-click dismiss). */
 function closeTutorial() {
-    localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
     document.getElementById('tutorial-overlay').classList.add('hidden');
 }
 
 /** Shows the tutorial once, automatically, the first time a new player ever loads the game. */
 function maybeShowTutorial() {
     if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) showTutorial();
+}
+
+/**
+ * Sets up and launches the scripted Pete-vs-Clint tutorial match: grants 2 free
+ * Pulse Phasers (mission-issued, bypasses the shop entirely), force-equips them
+ * on Pete, and jumps straight into an Easy match against Cowboy Clint — skipping
+ * Equip/Opponent Select/Difficulty since all of that is already decided.
+ */
+function launchCombatTutorial() {
+    if (typeof grantFreeItem === 'function') {
+        grantFreeItem('w31', 2); // 2x Pulse Phaser
+    }
+    _selectedCharId = 'c1'; // Pistol Pete
+    if (typeof PlayerLoadout !== 'undefined') {
+        PlayerLoadout.hand1 = 'w31';
+        PlayerLoadout.hand2 = 'w31';
+        if (typeof _saveCurrentLoadout === 'function') _saveCurrentLoadout();
+    }
+    _challengeTargetCharId = 'c9'; // Cowboy Clint — forced as the bot opponent
+    _tutorialMatchPending = true; // consumed by initGame() into G.isTutorialMatch, then cleared
+    document.getElementById('char-select-overlay').style.display = 'none';
+    if (typeof startWithDifficulty === 'function') startWithDifficulty('easy');
 }
 
 function detectOrientation() {

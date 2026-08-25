@@ -95,9 +95,9 @@ const WEAPON_POOL_BASE = [
   // onto existing categories: SMG/Machine Gun/Machine Pistol → their closest fit,
   // Laser Cannon → missile (heavy single-charge weapon), Marksman/Sniper Rifle → sniper.
   // 1-star
-  { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 3, speed: 'medium', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w31', name: 'Pulse Phaser', type: 'weapon', subtype: 'pistol', damage: 12, ammo: 8, speed: 'fast', range: 2, icon: '🔫', slot: 'hand' },
   { id: 'w32', name: 'Simple Striker', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 5, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
-  { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 16, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
+  { id: 'w33', name: 'Two Banger', type: 'weapon', subtype: 'revolver', damage: 28, ammo: 2, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w34', name: 'One Shot Wonder', type: 'weapon', subtype: 'pistol', damage: 8, ammo: 1, speed: 'slow', range: 1, icon: '🔫', slot: 'hand' },
   { id: 'w35', name: 'Clover Charm', type: 'weapon', subtype: 'pistol', damage: 24, ammo: 3, speed: 'charged', range: 1, icon: '🔫', slot: 'hand' },
   // 2-star
@@ -215,7 +215,12 @@ const GEAR_POOL = GEAR_POOL_BASE.map(g => ({ ...g, price: g.defense * g.durabili
 // Everyone else starts locked — win against a character on EVERY difficulty
 // (easy/medium/hard/impossible) to unlock them. See progression.js for the
 // win-tracking functions and char-select.js for the Bestiary/Challenge UI.
-const STARTER_UNLOCKED_IDS = ['c1', 'c9']; // Pistol Pete, Cowboy Clint — matching gunslinger kits
+// Only Pete is a static starter now — Clint is unlocked through the Sterling
+// Cross tutorial itself (see char-select.js launchCombatTutorial()), not as a
+// free starting character. If Clint were also in this list, the entire
+// tutorial premise ("you're locked out of him until you beat him") would be
+// moot, since he'd already be unlocked before the tutorial even started.
+const STARTER_UNLOCKED_IDS = ['c1']; // Pistol Pete only
 
 // Every equippable item across all three pools, for the Shop and Equip screens.
 const ALL_EQUIPPABLE = [...WEAPON_POOL, ...DEFENSE_POOL, ...GEAR_POOL];

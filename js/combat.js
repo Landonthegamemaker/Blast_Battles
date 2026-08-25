@@ -72,30 +72,25 @@ function getMissSplashDamage(finalDmg) {
   return Math.round(finalDmg * AOE_SPLASH_MULTIPLIER);
 }
 
-// Range multiplier bounds: 133% at point-blank (dist 0), down to 33% at max range.
-// Linear step size is exactly 1/maxRange between each tile of distance.
-const RANGE_MULTIPLIER_MAX = 4 / 3; // ~133% at dist 0
-const RANGE_MULTIPLIER_MIN = 1 / 3; // ~33% at dist === card.range
-
 /**
- * Scales base damage by how CLOSE the shooter is to their target, relative to
- * the weapon's max range. Point-blank hits the hardest; damage falls off the
- * further out you fire, bottoming out at RANGE_MULTIPLIER_MIN at max range.
- * Melee always deals full-ish damage at contact (range 0 — no scaling, since
- * melee only ever fires at dist 0 anyway).
+ * Scales base damage by how far the shot is from the weapon's max range.
+ * Full listed damage lands exactly AT max range; firing closer than that
+ * deals proportionally less — a range-3 sniper is nasty at range 3, but
+ * weak firing point-blank. Melee (range 0) always fires at dist 0, and the
+ * formula naturally resolves to a flat 1.0 there — no special case needed.
  *
- * mult(dist) = 4/3 - dist/maxRange
- *   dist 0            → 133%
- *   dist == maxRange  → 33%
- *   (linear in between — e.g. maxRange 3: dist1=100%, dist2=67%, dist3=33%)
+ * mult(dist) = 1 / (maxRange - dist + 1)
+ *   dist == maxRange → 100% (full listed damage)
+ *   dist 0 (maxRange 3) → 25%
+ *   dist 0 (maxRange 1) → 50%
+ *   dist 0 (maxRange 0, melee) → 100% (0 - 0 + 1 = 1)
  *
- * @param {{ subtype: string, range: number }} card
+ * @param {{ range: number }} card
  * @param {number} dist - Chebyshev distance to target
  * @returns {number}
  */
 function getRangeMultiplier(card, dist) {
-  if (card.subtype === 'melee' || card.range === 0) return 1; // no scaling — always point-blank
-  return RANGE_MULTIPLIER_MAX - (dist / card.range);
+  return 1 / (card.range - dist + 1);
 }
 
 /**
@@ -742,8 +737,7 @@ function endGame(winner, timeLimit = false) {
 
   const { battleFinal } = computeBattleScore(false);
   const outcome = won ? 'win' : draw ? 'draw' : 'loss';
-  const creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty, outcome) : 0;
-  const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
+  let creditsEarned = (typeof awardMatchCredits === 'function') ? awardMatchCredits(battleFinal, G.difficulty, outcome) : 0;
 
   // Character unlocks: winning marks this difficulty beaten for G.botChar. If that
   // was the last of the 4 difficulties needed, they're now unlocked to play as.
@@ -755,6 +749,43 @@ function endGame(winner, timeLimit = false) {
       unlockStr = ` 🔓 ${G.botChar.name} UNLOCKED!`;
     }
   }
+
+  // Sterling Cross tutorial match (Pete vs Clint, Easy) — first win only:
+  //   1. Pre-flags Clint's Medium/Hard/Impossible defeat progress, since the
+  //      tutorial only ever plays out on Easy — without this he could never
+  //      actually reach "beaten on all 4 difficulties" through this path.
+  //   2. Tops credits up to at least the price of Two Banger (his designated
+  //      revolver, cheapest one in the pool) — a real battle score might not
+  //      clear that on a first win, and the whole point of the tutorial is to
+  //      guarantee the player can afford the purchase that unlocks him.
+  let tutorialStr = '';
+  if (G.isTutorialMatch && won && !localStorage.getItem(TUTORIAL_MATCH_DONE_KEY)) {
+    if (typeof recordDefeat === 'function') {
+      recordDefeat(G.botChar.id, 'medium');
+      recordDefeat(G.botChar.id, 'hard');
+      recordDefeat(G.botChar.id, 'impossible');
+    }
+    if (typeof isCharUnlocked === 'function' && isCharUnlocked(G.botChar.id)) {
+      unlockStr = ` 🔓 ${G.botChar.name} UNLOCKED!`;
+    }
+    if (typeof WEAPON_POOL !== 'undefined' && typeof getCredits === 'function' && typeof addCredits === 'function') {
+      const twoBanger = WEAPON_POOL.find(w => w.id === 'w33');
+      const target = twoBanger ? twoBanger.price : 120;
+      const shortfall = target - getCredits();
+      if (shortfall > 0) {
+        addCredits(shortfall, 'tutorial guarantee');
+        creditsEarned += shortfall; // reflect the top-up in the displayed total
+      }
+    }
+    localStorage.setItem(TUTORIAL_MATCH_DONE_KEY, '1');
+    // Without this, the shop would still be locked to whichever character is
+    // _selectedCharId (Pete, pistol-only) — blocking the exact purchase this
+    // message promises. Pre-targets the shop at Clint's subtype (revolver) so
+    // buying Two Banger is actually possible however the player gets there.
+    if (typeof _shopTargetCharId !== 'undefined') _shopTargetCharId = G.botChar.id;
+    tutorialStr = ` 🎖 You now have enough for a Two Banger — visit the Shop!`;
+  }
+  const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
 
   const pDmgWon  = G.playerDmgDealt  > G.botDmgDealt;
   const pHealWon = G.playerHealTotal > G.botHealTotal;
@@ -770,12 +801,12 @@ function endGame(winner, timeLimit = false) {
   } else if (timeLimit) {
     title = won ? '🏆 VICTORY! ⏳' : '💀 DEFEATED ⏳';
     msg   = won
-      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}`
+      ? `Time's up — you outscored ${G.botChar.name} in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}${tutorialStr}`
       : `Time's up — ${G.botChar.name} outscored you in ${edge}.${creditsStr}`;
   } else {
     title = won ? '🏆 VICTORY!' : '💀 DEFEATED';
     msg   = won
-      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}`
+      ? `You defeated ${G.botChar.name}! Leading in ${pDmgWon && pHealWon ? 'DMG & Healing' : pDmgWon ? 'DMG' : pHealWon ? 'Healing' : 'NOTHING'}!${creditsStr}${unlockStr}${tutorialStr}`
       : (G.lastKillingBlow
           ? `${G.botChar.name} eliminated you with ${G.lastKillingBlow}.${creditsStr}`
           : `${G.botChar.name} has eliminated you.${creditsStr}`);
