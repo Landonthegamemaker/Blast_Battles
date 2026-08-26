@@ -135,49 +135,17 @@ function isOwned(itemId) {
  * Buys one additional copy of an item. Owning multiple copies is what allows
  * equipping the same weapon into both hand slots (or both arm slots).
  *
- * Both weapons AND gear are now character-locked (see data.js
- * CHARACTER_UNLOCK_REQUIREMENTS + GEAR_ITEM_OWNERS):
- *   - Weapons: purchasable if their subtype appears anywhere in the shopping-for
- *     character's weaponGroups (getAllowedPurchaseSubtypes).
- *   - Gear: purchasable if the shopping-for character's id is in that specific
- *     item's owner list (getGearItemOwners) — items can belong to more than
- *     one character (e.g. Shades → Hank AND Ace), not strictly one each.
- *   - Healing items are exempt from the lock entirely — any character can buy any of them.
- * "Shopping for" is normally whichever character is CURRENTLY SELECTED
- * (_selectedCharId), but the Bestiary can override this to a LOCKED character
- * via _shopTargetCharId (see char-select.js shopForLockedChar()), since you can
- * only ever *select* already-unlocked characters — without that override, any
- * item exclusive to a still-locked character could never be bought by anyone.
+ * The shop is a UNIVERSAL marketplace — no character-specific purchase lock.
+ * Buying something doesn't guarantee you can equip it: WEAPON_ATTRIBUTE_RESTRICTIONS
+ * (4 hard-restricted characters) and gear owner-groups (GEAR_ITEM_OWNERS in
+ * data.js) still gate what a given character can actually wear in-match — that's
+ * what preserves each character's identity now, not a purchase-time gate.
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string }}
  */
 function buyItem(itemId) {
   const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'Unknown item.' };
-
-  if (typeof isUniversalItem === 'function' && isUniversalItem(itemId)) {
-    // Healing items — no character lock at all.
-  } else {
-    const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
-      || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
-    const shoppingForChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
-      ? CHARACTER_POOL.find(c => c.id === shoppingForId)
-      : null;
-    if (shoppingForChar) {
-      if (item.type === 'weapon') {
-        const allowed = (typeof getAllowedPurchaseSubtypes === 'function') ? getAllowedPurchaseSubtypes(shoppingForChar.id) : [];
-        if (allowed.length && !allowed.includes(item.subtype)) {
-          const label = allowed.map(s => s.replace('_', ' ')).join(' or ');
-          return { ok: false, reason: `${shoppingForChar.name} can only buy ${label} weapons.` };
-        }
-      } else {
-        const owners = (typeof getGearItemOwners === 'function') ? getGearItemOwners(itemId) : null;
-        if (owners && !owners.includes(shoppingForChar.id)) {
-          return { ok: false, reason: `${item.name} isn't ${shoppingForChar.name}'s gear.` };
-        }
-      }
-    }
-  }
 
   const bal = getCredits();
   if (bal < item.price) return { ok: false, reason: 'Not enough credits.' };
@@ -192,13 +160,9 @@ function buyItem(itemId) {
  * Sells one owned copy of an item back for 50% of its price (rounded down).
  *
  * Safeguard: selling a weapon that would leave the player owning ZERO weapons
- * total is blocked UNLESS their credits after the sale can afford a weapon of
- * the CURRENTLY SELECTED character's designated subtype (if one is selected —
- * falls back to the cheapest weapon anywhere otherwise). This checks the
- * *purchasable* subtype specifically, not just anything they could equip —
- * since buyItem() now locks weapon purchases to one subtype per character,
- * "can afford some other weapon" isn't a real safety net if that other
- * weapon isn't even something they're allowed to buy going forward.
+ * total is blocked unless their credits after the sale can afford at least
+ * the cheapest weapon in the entire pool — simplified now that the shop is
+ * universal (no character-specific subtype filtering needed anymore).
  * @param {string} itemId
  * @returns {{ ok: boolean, reason?: string, refund?: number }}
  */
@@ -216,23 +180,11 @@ function sellItem(itemId) {
     const sellingLastWeapon = totalWeaponsOwned <= 1; // this is the only weapon unit left, of any kind
     if (sellingLastWeapon) {
       const creditsAfterSale = getCredits() + refund;
-      const shoppingForId = (typeof _shopTargetCharId !== 'undefined' && _shopTargetCharId)
-        || (typeof _selectedCharId !== 'undefined' && _selectedCharId);
-      const selectedChar = (shoppingForId && typeof CHARACTER_POOL !== 'undefined')
-        ? CHARACTER_POOL.find(c => c.id === shoppingForId)
-        : null;
-      const designated = selectedChar ? (typeof getAllowedPurchaseSubtypes === 'function' ? getAllowedPurchaseSubtypes(selectedChar.id) : []) : [];
-      const candidatePool = designated.length ? WEAPON_POOL.filter(w => designated.includes(w.subtype)) : WEAPON_POOL;
-      const cheapestReplacement = candidatePool.length
-        ? candidatePool.reduce((min, w) => (w.price < min.price ? w : min), candidatePool[0])
-        : null;
+      const cheapestReplacement = WEAPON_POOL.reduce((min, w) => (w.price < min.price ? w : min), WEAPON_POOL[0]);
       if (!cheapestReplacement || creditsAfterSale < cheapestReplacement.price) {
-        const who = selectedChar ? ` ${selectedChar.name} can buy` : '';
         return {
           ok: false,
-          reason: cheapestReplacement
-            ? `Selling your last weapon would leave you unable to afford a replacement${who} (cheapest is ${cheapestReplacement.name} at $${cheapestReplacement.price}). Buy something else first.`
-            : `Selling your last weapon would leave you with nothing${who}. Buy something else first.`
+          reason: `Selling your last weapon would leave you unable to afford a replacement (cheapest is ${cheapestReplacement.name} at $${cheapestReplacement.price}). Buy something else first.`
         };
       }
     }
@@ -356,7 +308,7 @@ function isCharUnlocked(charId) {
   const progress = getDefeatProgress(charId);
   if (!req.difficulties.every(d => progress[d])) return false;
   if (!req.weaponGroups.every(group => group.some(sub => _ownsAnyOfSubtype(sub)))) return false;
-  if (!req.gearItems.every(itemId => _ownsItem(itemId))) return false;
+  if (!req.gearItems.every(itemId => _ownsItemQty(itemId, req.gearQuantities[itemId] || 1))) return false;
   if (req.requiresAnyHealing && !_ownsAnyHealingItem()) return false;
   return true;
 }
@@ -372,6 +324,12 @@ function _ownsAnyOfSubtype(subtype) {
 function _ownsItem(itemId) {
   const map = _loadOwned();
   return (map[itemId] || 0) > 0;
+}
+
+/** True if the player owns at least `qty` units of a specific item id. */
+function _ownsItemQty(itemId, qty) {
+  const map = _loadOwned();
+  return (map[itemId] || 0) >= qty;
 }
 
 /** True if the player owns at least one of the universal healing items. */
@@ -410,7 +368,7 @@ function getUnlockProgressCount(charId) {
   current += req.weaponGroups.filter(group => group.some(sub => _ownsAnyOfSubtype(sub))).length;
 
   total += req.gearItems.length;
-  current += req.gearItems.filter(id => _ownsItem(id)).length;
+  current += req.gearItems.filter(id => _ownsItemQty(id, req.gearQuantities[id] || 1)).length;
 
   if (req.requiresAnyHealing) {
     total += 1;

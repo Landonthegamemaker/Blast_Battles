@@ -378,9 +378,10 @@ function applyLocationEffects(isCardDrawPhase = true) {
     }
   }
 
-  // Ammo Station — every phase you're standing on it, each weapon below max
-  // ammo gains +1 (never disappears, unlike the old one-time full-refill version).
-  if (pLoc.effect === 'ammo_refill') {
+  // Ammo Station — +1 ammo per TURN (only fires on the charged phase, the last
+  // phase of a turn), not per phase — +1/phase was effectively unlimited ammo
+  // for anyone camping on the tile (up to 4 refills per turn).
+  if (pLoc.effect === 'ammo_refill' && PHASES[G.phase] === 'charged') {
     const weapons = [...G.playerHand, ...G.playerInPlay].filter(c => c.type === 'weapon');
     const refillable = weapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
     if (refillable.length > 0) {
@@ -429,8 +430,8 @@ function applyLocationEffects(isCardDrawPhase = true) {
     logMsg('damage', `☠️ ${G.botChar.name} is off a hazard tile — takes 1 toxic dmg!`);
   }
 
-  // Ammo Station (bot) — same +1/phase, repeating, as the player gets.
-  if (bLoc.effect === 'ammo_refill') {
+  // Ammo Station (bot) — same +1/turn (charged phase only) as the player gets.
+  if (bLoc.effect === 'ammo_refill' && PHASES[G.phase] === 'charged') {
     const botWeapons = [...G.botHand, ...G.botInPlay].filter(c => c.type === 'weapon');
     const botRefillable = botWeapons.filter(c => c._maxAmmo !== undefined && c.ammo < c._maxAmmo);
     if (botRefillable.length > 0) {
@@ -749,23 +750,34 @@ function endGame(winner, timeLimit = false) {
   //   1. Pre-flags Clint's Medium/Hard/Impossible defeat progress, since the
   //      tutorial only ever plays out on Easy — without this he could never
   //      actually reach "beaten on all 4 difficulties" through this path.
-  //   2. Tops credits up to at least the price of Two Banger (his designated
-  //      revolver, cheapest one in the pool) — a real battle score might not
-  //      clear that on a first win, and the whole point of the tutorial is to
-  //      guarantee the player can afford the purchase that unlocks him.
+  // Sterling Cross tutorial match (Pete vs Clint, Easy) — first win only:
+  //   Tops credits up to at least the price of Two Banger (his required
+  //   Tops credits up to the FULL cost of Clint's entire unlock requirement —
+  //   cheapest legal revolver + every gear item he needs (hat/coat/boots/
+  //   holster) — computed dynamically so it stays correct if prices or his
+  //   requirement ever change, rather than hardcoding Two Banger's price.
+  //   A real battle score might not clear that on a first win, and the whole
+  //   point of the tutorial is to guarantee winning it ONCE is enough to fully
+  //   unlock him, not just afford the weapon.
+  //   (No more manually pre-flagging Medium/Hard/Impossible here — Clint's
+  //   unlock requirement is genuinely just an Easy win now, see
+  //   CHARACTER_UNLOCK_REQUIREMENTS in data.js, so the normal win-recording
+  //   above already satisfies his difficulty requirement on its own.)
   let tutorialStr = '';
   if (G.isTutorialMatch && won && !localStorage.getItem(TUTORIAL_MATCH_DONE_KEY)) {
-    if (typeof recordDefeat === 'function') {
-      recordDefeat(G.botChar.id, 'medium');
-      recordDefeat(G.botChar.id, 'hard');
-      recordDefeat(G.botChar.id, 'impossible');
-    }
-    if (typeof isCharUnlocked === 'function' && isCharUnlocked(G.botChar.id)) {
-      unlockStr = ` 🔓 ${G.botChar.name} UNLOCKED!`;
-    }
-    if (typeof WEAPON_POOL !== 'undefined' && typeof getCredits === 'function' && typeof addCredits === 'function') {
-      const twoBanger = WEAPON_POOL.find(w => w.id === 'w33');
-      const target = twoBanger ? twoBanger.price : 120;
+    if (typeof WEAPON_POOL !== 'undefined' && typeof getCredits === 'function' && typeof addCredits === 'function'
+      && typeof getUnlockRequirement === 'function' && typeof ALL_EQUIPPABLE !== 'undefined') {
+      const req = getUnlockRequirement(G.botChar.id);
+      let target = 0;
+      for (const group of req.weaponGroups) {
+        const candidates = WEAPON_POOL.filter(w => group.includes(w.subtype));
+        if (candidates.length) target += candidates.reduce((min, w) => (w.price < min.price ? w : min), candidates[0]).price;
+      }
+      for (const itemId of req.gearItems) {
+        const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
+        const qty = (typeof getRequiredGearQuantity === 'function') ? getRequiredGearQuantity(G.botChar.id, itemId) : 1;
+        if (item) target += item.price * qty;
+      }
       const shortfall = target - getCredits();
       if (shortfall > 0) {
         addCredits(shortfall, 'tutorial guarantee');
@@ -773,12 +785,7 @@ function endGame(winner, timeLimit = false) {
       }
     }
     localStorage.setItem(TUTORIAL_MATCH_DONE_KEY, '1');
-    // Without this, the shop would still be locked to whichever character is
-    // _selectedCharId (Pete, pistol-only) — blocking the exact purchase this
-    // message promises. Pre-targets the shop at Clint's subtype (revolver) so
-    // buying Two Banger is actually possible however the player gets there.
-    if (typeof _shopTargetCharId !== 'undefined') _shopTargetCharId = G.botChar.id;
-    tutorialStr = ` 🎖 You now have enough for a Two Banger — visit the Shop!`;
+    tutorialStr = ` 🎖 You now have enough to fully gear up and unlock Cowboy Clint — visit the Shop!`;
   }
   const creditsStr = ` (${creditsEarned >= 0 ? '+' : ''}${creditsEarned} 💰)`;
 

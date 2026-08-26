@@ -2344,19 +2344,10 @@
             <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Chest</span>
           </button>
           <button class="equip-slot" data-slot="armL" style="left:20%;top:31%;" onclick="openSlotPicker('armL')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Shoulder</span>
+            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Arm</span>
           </button>
           <button class="equip-slot" data-slot="armR" style="left:80%;top:31%;" onclick="openSlotPicker('armR')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Shoulder</span>
-          </button>
-          <button class="equip-slot" data-slot="wristL" style="left:16%;top:47%;" onclick="openSlotPicker('wristL')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">L Wrist</span>
-          </button>
-          <button class="equip-slot" data-slot="wristR" style="left:84%;top:47%;" onclick="openSlotPicker('wristR')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">R Wrist</span>
-          </button>
-          <button class="equip-slot" data-slot="hips" style="left:50%;top:56%;" onclick="openSlotPicker('hips')">
-            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Hips</span>
+            <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Arm</span>
           </button>
           <button class="equip-slot equip-slot-hand" data-slot="hand1" style="left:11%;top:63%;" onclick="openSlotPicker('hand1')">
             <span class="equip-slot-icon">➕</span><span class="equip-slot-label">Hand</span>
@@ -2409,6 +2400,7 @@
           🛒 SHOP</h2>
         <div id="shop-credits" style="font-size:0.85rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">💰 0</div>
       </div>
+      <div id="shop-target-banner" style="display:none;font-size:0.65rem;color:var(--accent);background:rgba(232,184,75,0.08);border:1px solid rgba(232,184,75,0.3);border-radius:6px;padding:5px 8px;margin-bottom:8px;"></div>
       <div id="shop-tabs" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;"></div>
       <div id="shop-msg" style="min-height:1.2em;font-size:0.65rem;color:var(--accent2);margin-bottom:6px;"></div>
       <div id="shop-grid"
@@ -2431,15 +2423,17 @@
   <!-- First-time welcome tutorial — auto-shown once, re-triggerable from Help -->
   <div class="modal-overlay hidden" id="tutorial-overlay">
     <div class="modal" style="max-width:460px;text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:1.6rem;">📞</span>
-        <div>
-          <div style="font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:0.85rem;color:var(--accent);letter-spacing:1px;">INCOMING TRANSMISSION</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:var(--muted);">DIRECTOR STERLING CROSS · SHADOW SQUADRON</div>
-        </div>
+      <h2
+        style="text-align:center;font-family:'Black Ops One','Impact','Arial Black',sans-serif;font-size:1.2rem;color:var(--accent);letter-spacing:2px;margin-bottom:12px;">
+        WELCOME TO BLAST BATTLES</h2>
+      <div style="font-size:0.75rem;line-height:1.9;color:var(--muted);">
+        <b style="color:var(--accent)">1. You start with 💰100 and zero gear.</b> Everything has to be bought first — nothing is pre-equipped.<br>
+        <b style="color:var(--accent)">2. Open the 🛒 SHOP and buy a weapon</b> — an M9 Pistol (💰50) is a solid start. Buy two and you can dual-wield as Pistol Pete — exactly 💰100.<br>
+        <b style="color:var(--accent)">3. Head to EQUIP</b> and drop your weapon(s) into the hand slots on the paperdoll.<br>
+        <b style="color:var(--accent)">4. Pick a difficulty and fight.</b> Winning earns credits — more on harder difficulties — and can unlock new characters to play as.<br>
+        <b style="color:var(--accent)">5. Come back to the Shop</b> anytime to buy more weapons, armor, and gear with what you've earned.
       </div>
-      <div id="tutorial-dialogue-text" style="font-size:0.8rem;line-height:1.7;color:var(--text);min-height:110px;"></div>
-      <button id="tutorial-next-btn" class="btn primary" style="width:100%;margin-top:16px;" onclick="advanceTutorialDialogue()">NEXT</button>
+      <button class="btn primary" style="width:100%;margin-top:16px;" onclick="closeTutorial()">LET'S GO</button>
     </div>
   </div>
 

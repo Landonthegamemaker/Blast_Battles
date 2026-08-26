@@ -104,11 +104,24 @@ function maybeShowTutorial() {
 function launchCombatTutorial() {
     if (typeof grantFreeItem === 'function') {
         grantFreeItem('w31', 2); // 2x Pulse Phaser
+        grantFreeItem('g9', 2);  // 2x Sneakers (feetL + feetR need a matching pair)
+        grantFreeItem('g28', 1); // Basketball Jersey
+        grantFreeItem('g29', 1); // Netted Shorts
+        grantFreeItem('g30', 2); // 2x Wristbands (wristL + wristR)
     }
     _selectedCharId = 'c1'; // Pistol Pete
     if (typeof PlayerLoadout !== 'undefined') {
         PlayerLoadout.hand1 = 'w31';
         PlayerLoadout.hand2 = 'w31';
+        // Pete's full 5-piece kit — feet (1 unit, matched pair) + chest + legs +
+        // both wrists (2 independent units) = exactly 5, fitting the armor cap
+        // exactly now that it's been raised from 2 to 5 for this purpose.
+        PlayerLoadout.feetL = 'g9';
+        PlayerLoadout.feetR = 'g9';
+        PlayerLoadout.chest = 'g28';
+        PlayerLoadout.legs = 'g29';
+        PlayerLoadout.wristL = 'g30';
+        PlayerLoadout.wristR = 'g30';
         if (typeof _saveCurrentLoadout === 'function') _saveCurrentLoadout();
     }
     _challengeTargetCharId = 'c9'; // Cowboy Clint — forced as the bot opponent
@@ -252,20 +265,11 @@ function makeCharCard(char) {
 }
 
 // ── Bestiary (view-only) ─────────────────────────────────────────────────────
-// Shows a locked character's per-difficulty progress AND their designated
-// weapon subtype, with a way to shop for that subtype specifically — this is
-// the only way to ever buy toward unlocking a LOCKED character, since you can
-// only ever *select* already-unlocked characters. Without this, any subtype
-// not covered by a starter character would be permanently unpurchasable and
-// every character needing it would be soft-locked forever.
+// Shows a locked character's per-difficulty progress plus their full unlock
+// requirement (weapon groups, specific gear items, healing if applicable).
+// Purely informational — the Shop is universal now, so there's no special
+// "shop for this locked character" flow needed to buy toward their unlock.
 const DIFFICULTY_LABELS = { easy: '🟢 Easy', medium: '🟡 Medium', hard: '🔴 Hard', impossible: '🤖 Impossible' };
-
-// Who the Shop's subtype-lock currently applies to. Normally mirrors
-// _selectedCharId, but shopForLockedChar() below can override it to a LOCKED
-// character so their subtype becomes purchasable — reset back to null (falls
-// back to _selectedCharId) whenever the shop is closed, so it's a one-time
-// override per visit, not a lingering state that could confuse a later visit.
-let _shopTargetCharId = null;
 
 function openBestiary(charId) {
     const char = CHARACTER_POOL.find(c => c.id === charId);
@@ -301,10 +305,13 @@ function openBestiary(charId) {
     const gearRows = req.gearItems.map(itemId => {
         const item = ALL_EQUIPPABLE.find(i => i.id === itemId);
         if (!item) return '';
-        const owns = typeof _ownsItem === 'function' ? _ownsItem(itemId) : false;
+        const neededQty = req.gearQuantities[itemId] || 1;
+        const ownedQty = typeof getOwnedQuantity === 'function' ? getOwnedQuantity(itemId) : 0;
+        const owns = ownedQty >= neededQty;
+        const qtyLabel = neededQty > 1 ? ` ×${neededQty}` : '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:3px;background:${owns ? 'rgba(68,255,136,0.06)' : 'transparent'};">
-      <span style="font-size:0.62rem;">${item.icon} ${item.name}</span>
-      <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : '—'}</span>
+      <span style="font-size:0.62rem;">${item.icon} ${item.name}${qtyLabel}</span>
+      <span style="font-size:0.62rem;color:${owns ? 'var(--green)' : 'var(--muted)'};">${owns ? '✓' : `${ownedQty}/${neededQty}`}</span>
     </div>`;
     }).join('');
 
@@ -317,7 +324,7 @@ function openBestiary(charId) {
     })() : '';
 
     const allSatisfied = req.weaponGroups.every(g => g.some(sub => _ownsAnyOfSubtype(sub)))
-        && req.gearItems.every(id => _ownsItem(id))
+        && req.gearItems.every(id => _ownsItemQty(id, req.gearQuantities[id] || 1))
         && (!req.requiresAnyHealing || _ownsAnyHealingItem());
     const unlockProg = (typeof getUnlockProgressCount === 'function') ? getUnlockProgressCount(charId) : { current: 0, total: 0 };
     const diffLabel = req.difficulties.length === 4 ? 'every difficulty' : req.difficulties.map(d => d[0].toUpperCase() + d.slice(1)).join('/');
@@ -326,7 +333,7 @@ function openBestiary(charId) {
     ${weaponRows}
     ${gearRows}
     ${healingRow}
-    ${!allSatisfied ? `<button class="btn primary" style="width:100%;margin:8px 0 10px;font-size:0.65rem;" onclick="shopForLockedChar('${charId}')">🛒 Shop</button>` : ''}
+    ${!allSatisfied ? `<button class="btn primary" style="width:100%;margin:8px 0 10px;font-size:0.65rem;" onclick="closeBestiary();openShop();">🛒 Shop</button>` : ''}
   `;
 
     document.getElementById('bestiary-body').innerHTML = `
@@ -344,12 +351,6 @@ function openBestiary(charId) {
 
 /** Opens the Shop pre-authorized to buy the given LOCKED character's designated
  *  subtype, since they can't be _selectedCharId (not unlocked) to unlock it normally. */
-function shopForLockedChar(charId) {
-    _shopTargetCharId = charId;
-    closeBestiary();
-    openShop();
-}
-
 function closeBestiary() {
     document.getElementById('bestiary-overlay').classList.add('hidden');
     const charSelectOverlay = document.getElementById('char-select-overlay');

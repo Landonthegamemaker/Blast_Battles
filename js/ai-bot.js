@@ -259,8 +259,8 @@ function impossibleBotPlayPhase() {
                 } else {
                     if (!G.botInPlay.find(c => c.id === card.id)) {
                         const equippedBotArmorML = G.botInPlay.filter(c => c.type === 'defense' && c.healAmount === 0).length;
-                        if (card.type === 'defense' && card.healAmount === 0 && equippedBotArmorML >= 2) {
-                            logMsg('bot', '🤖 AI already has 2 defensive items — passes.');
+                        if (card.type === 'defense' && card.healAmount === 0 && equippedBotArmorML >= 5) {
+                            logMsg('bot', '🤖 AI already has 5 defensive items — passes.');
                         } else {
                             G.botHand = G.botHand.filter(c => c.id !== card.id);
                             G.botInPlay.push(card);

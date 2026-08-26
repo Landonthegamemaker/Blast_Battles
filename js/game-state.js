@@ -189,7 +189,7 @@ function initGame() {
   let playerHand, playerLoadoutGear;
   if (hasLoadout) {
     playerHand = ['hand1', 'hand2'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
-    playerLoadoutGear = ['head', 'chest', 'legs', 'feet', 'armL', 'armR'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
+    playerLoadoutGear = ['head', 'chest', 'legs', 'feetL', 'feetR', 'armL', 'armR', 'hips'].map(s => PlayerLoadout[s]).filter(Boolean).map(cloneLoadoutItem);
 
     // Pistol Pete: the dual-wield "fire your second pistol free" mechanic is driven
     // entirely by a shared dualWieldPairId — starterDeck() used to set this up, but
@@ -685,7 +685,7 @@ function playerPlayCard(card) {
       // Armor equip
       if (G.playerInPlay.find(c => c.id === card.id)) { logMsg('system', `${card.name} is already equipped.`); return; }
       const equippedDefense = G.playerInPlay.filter(c => c.type === 'defense' && c.healAmount === 0).length;
-      if (equippedDefense >= 2) { logMsg('system', `You can only have 2 defensive items equipped at a time. Unequip one first.`); return; }
+      if (equippedDefense >= 5) { logMsg('system', `You can only have 5 defensive items equipped at a time. Unequip one first.`); return; }
       G.playerHand = G.playerHand.filter(c => c.id !== card.id);
       G.playerInPlay.push(card);
       logMsg('player', `You equip ${card.name} (${card.defense} def, ${card.durability} dur).`);

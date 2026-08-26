@@ -32,9 +32,10 @@
  * ── Rules enforced here ─────────────────────────────────────────────────
  *   - Weapon restrictions: a character with a restricted attribute (e.g. Lunging Logan —
  *     melee only) can't put a disallowed weapon in a hand slot.
- *   - 2-armor cap: head/chest/legs/feet(as one unit)/armL/armR. At most 2 of those
- *     armor units may be filled at once, same as the in-match "2 equipped defense
- *     items max" rule.
+ *   - 5-armor cap: head/chest/legs/feet(as one unit)/armL/armR/wristL/wristR/hips.
+ *     At most 5 of those armor units may be filled at once, same as the in-match
+ *     "5 equipped defense items max" rule — raised from 2 so a character can wear
+ *     their full pre-required gear set by default (e.g. Pistol Pete's 5-piece kit).
  *   - Footwear must be a matched pair: feetL and feetR always hold the SAME item
  *     (or both empty) — picking one auto-syncs the other when you own a spare
  *     unit; Begin Battle is blocked with a clear message if they end up mismatched
@@ -53,13 +54,13 @@ const LOADOUTS_KEY = 'bb-loadouts';
 // Which ALL_EQUIPPABLE `.slot` value each paperdoll slot pulls from.
 const EQUIP_SLOT_POOL = {
   head: 'head', chest: 'chest', legs: 'legs', feetL: 'feet', feetR: 'feet',
-  armL: 'arm', armR: 'arm', hand1: 'hand', hand2: 'hand',
+  armL: 'arm', armR: 'arm', wristL: 'wrist', wristR: 'wrist', hips: 'hips', hand1: 'hand', hand2: 'hand',
 };
-const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feetL', 'feetR', 'armL', 'armR'];
+const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feetL', 'feetR', 'armL', 'armR', 'wristL', 'wristR', 'hips'];
 const ALL_SLOTS = [...ARMOR_SLOTS, 'hand1', 'hand2'];
 
 function _emptyLoadout() {
-  return { head: null, chest: null, legs: null, feetL: null, feetR: null, armL: null, armR: null, hand1: null, hand2: null };
+  return { head: null, chest: null, legs: null, feetL: null, feetR: null, armL: null, armR: null, wristL: null, wristR: null, hips: null, hand1: null, hand2: null };
 }
 
 let PlayerLoadout = _emptyLoadout();
@@ -102,7 +103,7 @@ function _currentPlayerChar() {
  * slots), not two independent choices the way arms are.
  */
 function _armorSlotsFilledCount(excludeSlot = null) {
-  const singleSlots = ['head', 'chest', 'legs', 'armL', 'armR'];
+  const singleSlots = ['head', 'chest', 'legs', 'armL', 'armR', 'wristL', 'wristR', 'hips'];
   let count = singleSlots.filter(s => s !== excludeSlot && PlayerLoadout[s]).length;
   const excludingFeet = excludeSlot === 'feetL' || excludeSlot === 'feetR';
   if (!excludingFeet && (PlayerLoadout.feetL || PlayerLoadout.feetR)) count++;
@@ -217,7 +218,7 @@ function openSlotPicker(slot) {
   const isHandSlot = poolSlot === 'hand';
   const isArmorSlot = ARMOR_SLOTS.includes(slot);
   const char = _currentPlayerChar();
-  const armorCapReached = isArmorSlot && !PlayerLoadout[slot] && _armorSlotsFilledCount(slot) >= 2;
+  const armorCapReached = isArmorSlot && !PlayerLoadout[slot] && _armorSlotsFilledCount(slot) >= 5;
 
   const owned = ALL_EQUIPPABLE.filter(i => i.slot === poolSlot && isOwned(i.id));
   const emptyEl = document.getElementById('equip-picker-empty');
@@ -237,7 +238,7 @@ function openSlotPicker(slot) {
   if (armorCapReached) {
     const warn = document.createElement('div');
     warn.style.cssText = 'font-size:0.65rem;color:var(--accent2);padding:4px 2px;';
-    warn.textContent = '⚠ 2 armor pieces already equipped elsewhere — unequip one first.';
+    warn.textContent = '⚠ 5 armor pieces already equipped elsewhere — unequip one first.';
     listEl.appendChild(warn);
   }
 
@@ -266,7 +267,7 @@ function openSlotPicker(slot) {
     const lockNote = weaponBlocked
       ? `🔒 ${char.name} can't use this`
       : defenseBlocked ? (char.attribute === 'dual_wield' ? `🔒 Pete's hands are full` : `🔒 ${char.name} carries weapons only`)
-      : armorBlocked ? '🔒 2 armor max'
+      : armorBlocked ? '🔒 5 armor max'
       : quantityBlocked ? `🔒 Own ${ownedQty}, all in use` : '';
     const qtyHint = !locked && ownedQty > 1 ? ` · own ${ownedQty}` : '';
     row.innerHTML = `<span class="epr-icon">${item.icon}</span><span class="epr-name">${item.name}</span><span class="epr-stat">${lockNote || (_slotShortStat(item) + qtyHint)}</span>`;

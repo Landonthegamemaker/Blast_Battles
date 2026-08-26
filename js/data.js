@@ -184,9 +184,13 @@ const GEAR_POOL_BASE = [
   { id: 'g15', name: 'Headband', type: 'defense', subtype: 'gear_head', defense: 10, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🎽', slot: 'head' },
   { id: 'g16', name: 'Cloak', type: 'defense', subtype: 'gear_chest', defense: 35, durability: 4, maxDurability: 4, effectiveVs: ['sniper'], healAmount: 0, icon: '🧥', slot: 'chest' },
   { id: 'g17', name: 'Cowboy Hat', type: 'defense', subtype: 'gear_head', defense: 20, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🤠', slot: 'head' },
-  { id: 'g18', name: 'Trench Coat', type: 'defense', subtype: 'gear_chest', defense: 25, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest' },
+  { id: 'g18', name: 'Leather Vest', type: 'defense', subtype: 'gear_chest', defense: 25, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest' },
   { id: 'g19', name: 'Cowboy Boots', type: 'defense', subtype: 'gear_feet', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🥾', slot: 'feet' },
-  { id: 'g20', name: 'Holster', type: 'defense', subtype: 'gear_hand', defense: 5, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🔫', slot: 'hand' },
+  { id: 'g20', name: 'Holster', type: 'defense', subtype: 'gear_hips', defense: 5, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🔫', slot: 'hips' },
+  // Pistol Pete's exclusive free starter kit
+  { id: 'g28', name: 'Basketball Jersey', type: 'defense', subtype: 'gear_chest', defense: 20, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🏀', slot: 'chest' },
+  { id: 'g29', name: 'Netted Shorts', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🩳', slot: 'legs' },
+  { id: 'g30', name: 'Wristbands', type: 'defense', subtype: 'gear_wrist', defense: 10, durability: 2, maxDurability: 2, effectiveVs: [], healAmount: 0, icon: '🎽', slot: 'wrist' },
   { id: 'g21', name: 'Riot Face Shield', type: 'defense', subtype: 'gear_head', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun', 'sniper', 'explosive', 'melee'], healAmount: 0, icon: '🪖', slot: 'head' },
   { id: 'g22', name: 'Jean Jacket', type: 'defense', subtype: 'gear_chest', defense: 20, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🧥', slot: 'chest' },
   { id: 'g23', name: 'Ammo Belt', type: 'defense', subtype: 'gear_legs', defense: 15, durability: 3, maxDurability: 3, effectiveVs: [], healAmount: 0, icon: '🎒', slot: 'legs' },
@@ -244,15 +248,15 @@ const ALL_WEAPON_SUBTYPES = ['pistol', 'revolver', 'shotgun', 'assault_rifle', '
 const _EVERY_SUBTYPE_SEPARATELY = ALL_WEAPON_SUBTYPES.map(s => [s]); // "one of each type" — Shadow, Tracy
 
 const CHARACTER_UNLOCK_REQUIREMENTS = {
-  c1: { weaponGroups: [['pistol']], gearItems: ['g9'] }, // Pistol Pete — starter, no difficulty gate; sneakers
+  c1: { weaponGroups: [['pistol']], gearItems: ['g9', 'g28', 'g29', 'g30'] }, // Pistol Pete — starter, no difficulty gate; sneakers/jersey/shorts/sweatbands
   c2: { difficulties: ['hard'], weaponGroups: [['revolver'], ['explosive']], gearItems: ['d5', 'd14', 'g11', 'd28'] }, // Iron Titan
   c3: { difficulties: ['easy'], weaponGroups: [['melee']], gearItems: [] }, // Lunging Logan — weapon only, no gear
-  c4: { difficulties: ['easy'], weaponGroups: [['pistol', 'melee']], gearItems: ['d5'], requiresAnyHealing: true }, // Macy the Medic
+  c4: { difficulties: ['easy'], weaponGroups: [['pistol', 'melee']], gearItems: [], requiresAnyHealing: true }, // Macy the Medic
   c5: { difficulties: ['medium'], weaponGroups: [['explosive']], gearItems: ['d5', 'g3', 'd31'] }, // Toxic Trooper (d31 = new Hazmat Suit)
   c6: { difficulties: ['medium'], weaponGroups: [['smg', 'melee']], gearItems: ['g9', 'g15'] }, // Sprinting Sue (g15 = new Headband)
   c7: { difficulties: ['impossible'], weaponGroups: [['smg'], ['assault_rifle']], gearItems: ['g4', 'd6'] }, // Commando Cole
   c8: { difficulties: ['impossible'], weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g16'] }, // The Shadow (g16 = new Cloak)
-  c9: { difficulties: ['easy'], weaponGroups: [['revolver']], gearItems: ['g17', 'g18', 'g19', 'g20'] }, // Cowboy Clint — tutorial unlock
+  c9: { difficulties: ['easy'], weaponGroups: [['revolver']], gearItems: ['g17', 'g18', 'g19', 'g20'], gearQuantities: { g19: 2 } }, // Cowboy Clint — tutorial unlock; needs a MATCHING PAIR of boots
   c10: { difficulties: ['hard'], weaponGroups: [['shotgun'], ['explosive']], gearItems: ['g21', 'd3', 'd16'] }, // Sentinel Sam (g21 = new Riot Face Shield)
   c11: { difficulties: ['impossible'], weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g22', 'g23'] }, // Tracy Guns (new: jean jacket/ammo belt)
   c12: { difficulties: ['hard'], weaponGroups: [['sniper'], ['shotgun'], ['melee']], gearItems: ['d4', 'g24'] }, // Huntress Hellena (g24 = new Goggles)
@@ -269,8 +273,15 @@ function getUnlockRequirement(charId) {
     difficulties: req.difficulties || ['easy', 'medium', 'hard', 'impossible'],
     weaponGroups: req.weaponGroups || [],
     gearItems: req.gearItems || [],
+    gearQuantities: req.gearQuantities || {}, // itemId -> required qty; unlisted items default to 1
     requiresAnyHealing: !!req.requiresAnyHealing,
   };
+}
+
+/** How many units of a specific gear item a character's unlock requires (default 1). */
+function getRequiredGearQuantity(charId, itemId) {
+  const req = getUnlockRequirement(charId);
+  return req.gearQuantities[itemId] || 1;
 }
 
 /** Every weapon subtype a character is allowed to keep buying, once unlocked —
@@ -299,7 +310,8 @@ const GEAR_ITEM_OWNERS = {
   g4: ['c7'],                                 // Night Vision Goggles — Cole
   d6: ['c7'],                                 // Ballistic Helm — Cole
   g16: ['c8'],                                // Cloak (new) — Shadow
-  g17: ['c9'], g18: ['c9'], g19: ['c9'], g20: ['c9'], // Cowboy Hat/Trench Coat/Cowboy Boots/Holster (new) — Clint
+  g17: ['c9'], g18: ['c9'], g19: ['c9'], g20: ['c9'], // Cowboy Hat/Leather Vest/Cowboy Boots/Holster — Clint
+  g28: ['c1'], g29: ['c1'], g30: ['c1'],       // Basketball Jersey/Netted Shorts/Wristbands (new) — Pete's exclusive starter kit
   g21: ['c10'],                               // Riot Face Shield (new) — Sam
   d3: ['c10'],                                // Riot Vest — Sam
   d16: ['c10'],                               // Riot Shield — Sam
