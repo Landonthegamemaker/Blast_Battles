@@ -352,6 +352,10 @@ function shopForLockedChar(charId) {
 
 function closeBestiary() {
     document.getElementById('bestiary-overlay').classList.add('hidden');
+    const charSelectOverlay = document.getElementById('char-select-overlay');
+    if (charSelectOverlay && charSelectOverlay.style.display !== 'none' && typeof renderCharGrids === 'function') {
+        renderCharGrids(_currentSort);
+    }
 }
 
 // ── Opponent Select ───────────────────────────────────────────────────────────

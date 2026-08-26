@@ -142,7 +142,7 @@ const DEFENSE_POOL_BASE = [
   { id: 'd1', name: 'Kevlar Vest', type: 'defense', subtype: 'vest', defense: 40, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
   { id: 'd2', name: 'Tactical Vest', type: 'defense', subtype: 'vest', defense: 50, durability: 3, maxDurability: 3, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
   { id: 'd3', name: 'Riot Vest', type: 'defense', subtype: 'vest', defense: 30, durability: 4, maxDurability: 4, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
-  { id: 'd4', name: 'Nano Vest', type: 'defense', subtype: 'vest', defense: 60, durability: 2, maxDurability: 2, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
+  { id: 'd4', name: 'Stealth Suit', type: 'defense', subtype: 'vest', defense: 60, durability: 2, maxDurability: 2, effectiveVs: ['pistol', 'assault_rifle', 'shotgun'], healAmount: 0, icon: '🛡️', slot: 'chest' },
   // Helmets → HEAD
   { id: 'd5', name: 'Combat Helmet', type: 'defense', subtype: 'helmet', defense: 45, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
   { id: 'd6', name: 'Ballistic Helm', type: 'defense', subtype: 'helmet', defense: 55, durability: 3, maxDurability: 3, effectiveVs: ['sniper'], healAmount: 0, icon: '⛑️', slot: 'head' },
@@ -245,21 +245,21 @@ const _EVERY_SUBTYPE_SEPARATELY = ALL_WEAPON_SUBTYPES.map(s => [s]); // "one of 
 
 const CHARACTER_UNLOCK_REQUIREMENTS = {
   c1: { weaponGroups: [['pistol']], gearItems: ['g9'] }, // Pistol Pete — starter, no difficulty gate; sneakers
-  c2: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['revolver'], ['explosive']], gearItems: ['d5', 'd14', 'g11', 'd28'] }, // Iron Titan — 6 items is heaviest of any regular character, dropping Impossible to balance total burden
-  c3: { weaponGroups: [['melee']], gearItems: [] }, // Lunging Logan — weapon only, no gear
-  c4: { weaponGroups: [['pistol', 'melee']], gearItems: ['d5'], requiresAnyHealing: true }, // Macy the Medic
-  c5: { weaponGroups: [['explosive']], gearItems: ['d5', 'g3', 'd31'] }, // Toxic Trooper (d31 = new Hazmat Suit)
-  c6: { weaponGroups: [['smg', 'melee']], gearItems: ['g9', 'g15'] }, // Sprinting Sue (g15 = new Headband)
-  c7: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['smg'], ['assault_rifle']], gearItems: ['g4', 'd6'] }, // Commando Cole — no Impossible needed
-  c8: { weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g16'] }, // The Shadow (g16 = new Cloak)
-  c9: { difficulties: ['easy'], weaponGroups: [['revolver']], gearItems: ['g17', 'g18', 'g19', 'g20'] }, // Cowboy Clint — tutorial unlock, Easy only
-  c10: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['shotgun'], ['explosive']], gearItems: ['g21', 'd3', 'd16'] }, // Sentinel Sam (g21 = new Riot Face Shield)
-  c11: { weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g22', 'g23'] }, // Tracy Guns (new: jean jacket/ammo belt)
-  c12: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['sniper'], ['shotgun'], ['melee']], gearItems: ['d4', 'g24'] }, // Huntress Hellena (g24 = new Goggles)
-  c13: { weaponGroups: [['pistol'], ['smg']], gearItems: ['g25', 'd2'] }, // Tactical Tim (g25 = new Radar Remote)
-  c14: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['assault_rifle'], ['sniper']], gearItems: ['d5', 'd2', 'g10'] }, // Ranger Kate
-  c15: { weaponGroups: [['explosive'], ['smg']], gearItems: ['g26', 'd9'] }, // Hank the Tank (g26 = new Shades)
-  c16: { difficulties: ['easy', 'medium', 'hard'], weaponGroups: [['pistol'], ['revolver']], gearItems: ['g26', 'g27', 'd1'] }, // Agent Ace (g27 = new Fedora)
+  c2: { difficulties: ['hard'], weaponGroups: [['revolver'], ['explosive']], gearItems: ['d5', 'd14', 'g11', 'd28'] }, // Iron Titan
+  c3: { difficulties: ['easy'], weaponGroups: [['melee']], gearItems: [] }, // Lunging Logan — weapon only, no gear
+  c4: { difficulties: ['easy'], weaponGroups: [['pistol', 'melee']], gearItems: ['d5'], requiresAnyHealing: true }, // Macy the Medic
+  c5: { difficulties: ['medium'], weaponGroups: [['explosive']], gearItems: ['d5', 'g3', 'd31'] }, // Toxic Trooper (d31 = new Hazmat Suit)
+  c6: { difficulties: ['medium'], weaponGroups: [['smg', 'melee']], gearItems: ['g9', 'g15'] }, // Sprinting Sue (g15 = new Headband)
+  c7: { difficulties: ['impossible'], weaponGroups: [['smg'], ['assault_rifle']], gearItems: ['g4', 'd6'] }, // Commando Cole
+  c8: { difficulties: ['impossible'], weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g16'] }, // The Shadow (g16 = new Cloak)
+  c9: { difficulties: ['easy'], weaponGroups: [['revolver']], gearItems: ['g17', 'g18', 'g19', 'g20'] }, // Cowboy Clint — tutorial unlock
+  c10: { difficulties: ['hard'], weaponGroups: [['shotgun'], ['explosive']], gearItems: ['g21', 'd3', 'd16'] }, // Sentinel Sam (g21 = new Riot Face Shield)
+  c11: { difficulties: ['impossible'], weaponGroups: _EVERY_SUBTYPE_SEPARATELY, gearItems: ['g22', 'g23'] }, // Tracy Guns (new: jean jacket/ammo belt)
+  c12: { difficulties: ['hard'], weaponGroups: [['sniper'], ['shotgun'], ['melee']], gearItems: ['d4', 'g24'] }, // Huntress Hellena (g24 = new Goggles)
+  c13: { difficulties: ['impossible'], weaponGroups: [['pistol'], ['smg']], gearItems: ['g25', 'd2'] }, // Tactical Tim (g25 = new Radar Remote)
+  c14: { difficulties: ['medium'], weaponGroups: [['assault_rifle'], ['sniper']], gearItems: ['d5', 'd2', 'g10'] }, // Ranger Kate
+  c15: { difficulties: ['hard'], weaponGroups: [['explosive'], ['smg']], gearItems: ['g26', 'd9'] }, // Hank the Tank (g26 = new Shades)
+  c16: { difficulties: ['medium'], weaponGroups: [['pistol'], ['revolver']], gearItems: ['g26', 'g27', 'd1'] }, // Agent Ace (g27 = new Fedora)
 };
 
 /** Returns { difficulties, weaponGroups, gearItems, requiresAnyHealing } for a character. */
@@ -304,7 +304,7 @@ const GEAR_ITEM_OWNERS = {
   d3: ['c10'],                                // Riot Vest — Sam
   d16: ['c10'],                               // Riot Shield — Sam
   g22: ['c11'], g23: ['c11'],                 // Jean Jacket/Ammo Belt (new) — Tracy
-  d4: ['c12'],                                // Nano Vest — Hellena
+  d4: ['c12'],                                // Stealth Suit — Hellena
   g24: ['c12'],                               // Goggles (new) — Hellena
   g25: ['c13'],                               // Radar Remote (new) — Tim
   d2: ['c13', 'c14'],                         // Tactical Vest — Tim, Kate

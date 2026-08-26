@@ -49,6 +49,7 @@ function closeShop() {
   if (charSelectOverlay && charSelectOverlay.style.display !== 'none') {
     const el = document.getElementById('charselect-credits');
     if (el) el.textContent = `💰 ${getCredits()}`;
+    if (typeof renderCharGrids === 'function' && typeof _currentSort !== 'undefined') renderCharGrids(_currentSort);
   }
 }
 
